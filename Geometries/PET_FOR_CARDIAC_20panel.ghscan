@@ -1,0 +1,16 @@
+scanner name:    PET_FOR_CARDIAC_20panel
+modality:    PET
+scanner radius:    246.64
+number of elements:    102400
+number of layers:    1
+number of crystals in layer(s):    102400
+crystals size depth:    20
+crystals size transaxial:    1.55
+crystals size axial:    1.55
+voxels number transaxial:    170
+voxels number axial:    170
+field of view transaxial:    170
+field of view axial:    170
+min angle difference:    0 #deg
+mean depth of interaction:    -1 #optional (default value : center of crystal ). Input value must correspond to the distance from the crystal surface, or negative value if default
+description:    LUT generated from geom file: PET_FOR_CARDIAC_20panel.geom

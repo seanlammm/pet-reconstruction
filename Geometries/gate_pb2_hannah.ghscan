@@ -1,0 +1,16 @@
+scanner name:    gate_pb2_hannah
+modality:    PET
+scanner radius:    103.72
+number of elements:    6912
+number of layers:    1
+number of crystals in layer(s):    6912
+crystals size depth:    5
+crystals size transaxial:    3
+crystals size axial:    3
+voxels number transaxial:    217
+voxels number axial:    120
+field of view transaxial:    217
+field of view axial:    120
+min angle difference:    0 #deg
+mean depth of interaction:    -1 #optional (default value : center of crystal ). Input value must correspond to the distance from the crystal surface, or negative value if default
+description:    LUT generated from geom file: gate_pb2_hannah.geom

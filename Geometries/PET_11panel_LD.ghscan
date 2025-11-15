@@ -1,0 +1,16 @@
+scanner name:    PET_11panel_LD
+modality:    PET
+scanner radius:    183.06
+number of elements:    57600
+number of layers:    1
+number of crystals in layer(s):    57600
+crystals size depth:    20
+crystals size transaxial:    2.05
+crystals size axial:    2.05
+voxels number transaxial:    160
+voxels number axial:    240
+field of view transaxial:    257.413
+field of view axial:    280.2
+min angle difference:    0 #deg
+mean depth of interaction:    -1 #optional (default value : center of crystal ). Input value must correspond to the distance from the crystal surface, or negative value if default
+description:    LUT generated from geom file: PET_11panel_LD.geom
