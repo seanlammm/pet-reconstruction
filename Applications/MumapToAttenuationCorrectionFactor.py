@@ -85,7 +85,7 @@ class MumapToAttenuationCorrectionFactor(AppGeneral):
 if __name__ == "__main__":
     import os
     os.chdir(r"/share/home/lyj/files/git-project/pet-reconstuction")
-    device_id = 2
+    device_id = 3
     scanner_option = ScannerOption("PET_11panel_LD")
 
     recon_option = ReconOption(
@@ -102,7 +102,7 @@ if __name__ == "__main__":
         device_id=device_id
     )
     # 只需要保证 mumap 是与重建图像方向一致，且单位为 cm-1
-    atn_img = np.fromfile(r"/share/home/lyj/files/11panel_recon/20250521_medium_hoffman/t6_medium_hoffman_20250521.img", dtype=np.float32).reshape([300, 300, 300])
+    atn_img = np.fromfile(r"/share/home/lyj/files/11panel_recon/20250916_human/registrated_mumap.img", dtype=np.float32).reshape([300, 300, 300])
     get_acf = MumapToAttenuationCorrectionFactor(scanner_option, recon_option, atn_img, device_id)
     acf = get_acf.run()
-    acf.astype(np.float32).tofile(r"/share/home/lyj/files/11panel_recon/20250521_medium_hoffman/acfactor_medium_hoffman_20250521.raw")
+    acf.astype(np.float32).tofile(r"/share/home/lyj/files/11panel_recon/20250916_human/ac_factor_20250916_human.raw")

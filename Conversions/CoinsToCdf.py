@@ -3,6 +3,7 @@ import struct
 import os
 from tqdm import tqdm
 import sys
+import warnings
 
 sys.path.append(r"/home/linyuejie/Documents/codes/pet-reconstuction")
 from Generals.ScannerGenerals import ScannerOption
@@ -31,7 +32,7 @@ class CoinsToCdf:
         self.w_engwindow = with_energy_window
         self.tof_range = np.zeros(2)
 
-        if self.total_time.shape[0] == 1:
+        if isinstance(total_time, int):
             self.time_loop = np.arange(1, self.total_time + 1)
         else:
             self.time_loop = self.total_time
@@ -100,6 +101,7 @@ class CoinsToCdf:
 
             total_time = self.total_time * 60  # unit: second 11panel
             # total_time = self.total_time * 6  # unit: second  Cardiac
+            # total_time = self.total_time * 5  # unit: second  TotalBody
             sum_singles_rates = sum_singles_counts / total_time
             return sum_singles_rates
 
@@ -111,6 +113,38 @@ class CoinsToCdf:
             randoms_rate = 2 * coin_time_window * singles_rate_0 * singles_rate_1
 
             return randoms_rate.astype(np.float32)
+
+    # def get_randoms_rate(self, coins_data=None): # total-body
+    #     if coins_data is None:
+    #         num_of_crystal = self.scanner_option.crystal_per_layer * self.scanner_option.layers
+    #         sum_singles_counts = np.zeros([num_of_crystal])
+    #         for time in tqdm(self.time_loop, desc="Collecting singles counts"):
+    #             for pack in range(1, 300):
+    #                 singles_counts_file = os.path.join(self.file_path, "singles_counts%d_%d.dat" % (time, pack))
+    #                 if not os.path.exists(singles_counts_file):
+    #                     continue
+    #
+    #                 item_size = np.dtype(np.uint16).itemsize
+    #                 start_idx = int(self.w_engwindow[0] // 10)
+    #                 end_idx = int(self.w_engwindow[1] // 10)
+    #                 counts = (end_idx - start_idx) * num_of_crystal  # +1 代表包含右边界
+    #                 offset = start_idx * num_of_crystal * item_size
+    #                 singles_counts = np.fromfile(singles_counts_file, dtype=np.uint16, count=counts, offset=offset).reshape([-1, num_of_crystal])
+    #                 sum_singles_counts += np.sum(singles_counts, axis=0)
+    #
+    #         total_time = self.total_time * 5  # unit: second  TotalBody
+    #         sum_singles_rates = sum_singles_counts / total_time
+    #         return sum_singles_rates
+    #
+    #     else:
+    #         # coin_time_window = self.tw * 2.5 * 1e-9  # time_window * seconds per time window
+    #         coin_time_window = self.tw * 1e-12  # time_window * seconds per time window
+    #         singles_rate_0 = self.sum_singles_rates[coins_data[:, 0] + (22*12*10*6*8)]
+    #         singles_rate_1 = self.sum_singles_rates[coins_data[:, 1] + (22*12*10*6*8)]
+    #         randoms_rate = 2 * coin_time_window * singles_rate_0 * singles_rate_1
+    #
+    #         return randoms_rate.astype(np.float32)
+
 
     def get_ac_factor(self, coins_data=None):
         if coins_data is None:
@@ -171,7 +205,8 @@ class CoinsToCdf:
             os.makedirs(self.save_path)
 
         if os.path.exists(cdf_file) or os.path.exists(console_output_file) or os.path.exists(cdh_file):
-            raise FileExistsError(f"File already exists")
+            print("File already exists.\nProgram will do nothing but return. ")
+            return
 
         with open(console_output_file, 'a') as file:
             print(f"Cdf output path: {cdf_file}", file=file)
@@ -183,16 +218,20 @@ class CoinsToCdf:
             print(f"Cdf with DOI: {self.w_doi}", file=file)
             print(f"Cdf with TOF: {self.w_tof}", file=file)
             print(f"\n", file=file)
-            print(f"time window setting: {self.tw}*2.5 ns", file=file)
+            # print(f"time window setting: {self.tw}*2.5 ns", file=file)
+            print(f"time window setting: {self.tw} ps", file=file)
             print(f"Acquisition total time: {self.total_time * 60} s", file=file)
+            # print(f"Acquisition total time: {self.total_time * 5} s", file=file)
             # print(f"Acquisition total time: {self.total_time * 6} s", file=file)
             print(f"\n", file=file)
 
         num_counts = 0
         for time in tqdm(self.time_loop, desc="Stacking coins..."):
             for pack in range(1, 300):
+            # for pack in range(1, 2):
 
                 coins_file_path = "%s/coins%d_%d.dat" % (self.file_path, time, pack)
+                # coins_file_path = "%s/coins%d.dat" % (self.file_path, time)
                 if not os.path.exists(coins_file_path):
                     continue
                 coin_info = coin_dat_to_info(file_path=coins_file_path, with_multiple=self.w_multi, eng_window=self.w_engwindow, time_window=self.tw, return_tof=self.w_tof)
@@ -283,6 +322,7 @@ class CoinsToCdf:
             print(f"Data mode: list-mode", file=file)
             print(f"Data type: PET", file=file)
             print(f"Start time (s): 0", file=file)
+            # print(f"Duration (s): {self.total_time * 5}", file=file)
             print(f"Duration (s): {self.total_time * 60}", file=file)
             # print(f"Duration (s): {self.total_time * 6}", file=file)
             # print(f"Duration (s): {self.total_time}", file=file)
@@ -306,30 +346,3 @@ class CoinsToCdf:
         # 清理变量
         self.norm_factor = None
         self.ac_factor = None
-
-
-if __name__ == "__main__":
-    os.chdir(r"D:\linyuejie\git-project\pet-reconstuction")
-    scanner_option = ScannerOption("PET_11panel_LD")
-
-    coins2cdf = CoinsToCdf(
-        scanner_option=scanner_option,
-        file_path=r"path/to/coins",
-        save_path=r"path/to/cdf",
-        save_filename="20250827_t6_human",
-        total_time=25,
-        time_window=1000,
-        with_random_rate=True,
-        with_attenuation_correction_factor=False,
-        with_normalization_factor=False,
-        with_scatter_correction_factor=False,
-        with_doi=False,
-        with_tof=True,
-        tof_resolution=300,
-        ac_factor_file_path=r"",
-        norm_factor_file_path=r"",
-        sc_factor_file_path="",
-        with_multiple_coins=True,
-        with_energy_window=[411, 611]
-    )
-    coins2cdf.run()

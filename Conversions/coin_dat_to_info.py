@@ -35,9 +35,9 @@ import os
 #     doi = np.frombuffer(raw_data, dtype=np.float32, count=data_len, offset=get_offset(0, 0, 1, 0))
 #     energy = np.frombuffer(raw_data, dtype=np.uint16, count=data_len, offset=get_offset(0, 0,1, 1))
 #     multiple_flag = np.frombuffer(raw_data, dtype=np.uint32, count=data_len, offset=get_offset(0, 1, 1, 1))
-#
 #     time = np.frombuffer(raw_data, dtype=np.uint64, count=data_len, offset=get_offset(0, 1, 2, 1))
 #
+#     castor_id = castor_id - (22*12*10*6*8) # total body single ring
 #     return castor_id, doi, energy, multiple_flag, time
 
 # def get_coins_data(file_path):
@@ -81,6 +81,42 @@ import os
 #     time = np.frombuffer(raw_data, dtype=np.uint32, count=data_len, offset=get_offset(3, 3, 2, 1))
 #
 #     return castor_id, doi, energy, multiple_flag, time
+
+
+# def get_coins_data(file_path):
+#     '''
+#     Read coins of old 22bit data type in cardiac 20251025
+#     :param file_path:
+#     :return:
+#     '''
+#     with open(file_path, 'rb') as f:
+#         raw_data = f.read()
+#     block_size = 14  # 22-bit
+#     data_len = int(os.path.getsize(file_path) / block_size)
+#     if os.path.getsize(file_path) / block_size % 1 != 0:
+#         raise Exception("Error in size.")
+#
+#     format_uint8 = f'{data_len}B'  # N 个 uint8
+#     format_uint16 = f'{data_len}H'  # N 个 uint16
+#     format_uint32 = f'{data_len}I'  # N 个 uint32
+#     format_float = f'{data_len}f'  # N 个 float
+#     format_uint64 = f'{data_len}Q'  # N 个 uint64
+#
+#     def get_offset(uint8_num, uint16_num, uint32_num, float_num):
+#         uint8_offset = data_len
+#         uint16_offset = data_len * 2
+#         uint32_offset = data_len * 4
+#         float_offset = data_len * 4
+#
+#         offset = uint8_offset * uint8_num + uint16_offset * uint16_num + uint32_offset * uint32_num + float_offset * float_num
+#         return offset
+#
+#     castor_id = np.frombuffer(raw_data, dtype=np.uint32, count=data_len, offset=get_offset(0, 0, 0, 0))
+#     energy = np.frombuffer(raw_data, dtype=np.uint16, count=data_len, offset=get_offset(0, 0, 1, 0))
+#     multiple_flag = np.frombuffer(raw_data, dtype=np.uint32, count=data_len, offset=get_offset(0, 1, 1, 0))
+#     time = np.frombuffer(raw_data, dtype=np.uint32, count=data_len, offset=get_offset(0, 1, 2, 0))
+#
+#     return castor_id, np.ones_like(time), energy, multiple_flag, time
 
 
 def get_coins_data(file_path):
