@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="gpu-recon" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="gpu-recon" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="test-code" project-jdk-type="Python SDK" />
 </project>
