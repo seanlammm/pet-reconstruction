@@ -32,7 +32,8 @@ def coins_to_cdf(file_path, coin_type, with_scatter=True):
     crystal_id = coins["crystal_id"].astype(np.double)
     scatter_flag = coins["scatter_flag"].astype(np.double)
     global_time = coins["global_time"].astype(np.double)
-    global_time = (global_time * 1e3).astype(np.uint32)  # convert 1e-6s(us) to 1e-9s(ps)
+    deposited_energy = coins["deposited_energy"].astype(np.double)
+    global_time = (global_time * 1e6)  # convert 1e-6s(us) to 1e-12s(ps)
 
     castor_ids = np.zeros(panel_id.shape[0], dtype=np.uint32)
     if coin_type == 0:
@@ -49,7 +50,7 @@ def coins_to_cdf(file_path, coin_type, with_scatter=True):
     castor_ids = castor_ids.reshape([-1, 2])
     scatter_flag = scatter_flag.reshape([-1, 2])
     global_time = global_time.reshape([-1, 2])
-    tof = global_time[:, 0] - global_time[:, 1]
+    tof = (global_time[:, 0] - global_time[:, 1]).astype(np.float32)
 
     if not with_scatter:
         scatter_coins_flag = scatter_flag.sum(axis=1) > 0
