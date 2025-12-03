@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-
+import os
 
 def zero_outside_radius(image, radius, center=None):
     """
@@ -87,16 +87,16 @@ def voxel_center_distance(shape, voxel_size):
 
 
 def print_source_file(index, source_particle, location, dir_path):
-    file_path = dir_path + "20251027_human_sources_%d.txt" % index
+    file_path = dir_path + "sources_%d.txt" % index
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(f"{np.sum(source_particle > 0)}\n")
         f.write(f"Natoms(equal to activity times lamda) type(from isotope file, start from 0), shape type, centerx(cm) centery(cm) centerz(cm) Threecoefftodefineshape# \n")
         for i in range(source_particle.shape[0]):
-            f.write(f"{(source_particle[i]).astype(int)} {0} {0} {location[i, 0]} {location[i, 1]} {location[i, 2]} {1.3} {1.3} {2.79}\n")
+            f.write(f"{(source_particle[i]).astype(int)} {0} {0} {location[i, 0]} {location[i, 1]} {location[i, 2]} {0.13} {0.13} {0.279}\n")
 
 
 def print_input_file(index, dir_path):
-    file_path = dir_path + "input_20251027_human_%d.in" % index
+    file_path = dir_path + "input_%d.in" % index
     # 定义需要替换的变量（可根据实际值修改）
     device_number = 3
     noncolinear_angle = 0.0037056
@@ -107,7 +107,7 @@ def print_input_file(index, dir_path):
     phantom_density_file = "/share/home/lyj/Downloads/gPET_to_SZBL/Example/input/phantom_20251027_human/20251027_human_density.raw"
     simulation_history = 0
     use_phase_space_source = 0
-    source_file = "/share/home/lyj/Downloads/gPET_to_SZBL/Example/input/source_20251027_human/20251027_human_sources_%d.txt" % index
+    source_file = "/share/home/lyj/Downloads/gPET_to_SZBL/Example/input/source_20251027_human_fix/sources_%d.txt" % index
     particle_type = 0
     positron_range_consider = 0
     decay_time = (0, 100)
@@ -187,14 +187,15 @@ if __name__ == "__main__":
 
     particle_num = img.copy() * ratio
     particle_sum = particle_num.sum(axis=1).sum(axis=1).max()
-    dx, dy, dz = voxel_center_distance(img.shape, [2.79, 1.3, 1.3])
+    dx, dy, dz = voxel_center_distance(img.shape, [0.279, 0.13, 0.13])
 
     '''
     目前按照每个文件包含一个 slice 的方法只能得到 500w 左右的数据，需要 500w x 2 = 1000w 左右的数据量
     需要根据仿真光子数量自动分片
     '''
-    particle_num *= 2
+    particle_num *= 2 / 10 * 4
     particle_num = particle_num.reshape(-1).astype(int)
+    print(particle_num.sum())
     dx = dx.reshape(-1)
     dy = dy.reshape(-1)
     dz = dz.reshape(-1)
@@ -226,6 +227,12 @@ if __name__ == "__main__":
         current_dy = dy[splits_index == i]
         current_dz = dz[splits_index == i]
 
-        print_source_file(i, current_slice, np.column_stack((current_dx, current_dy, current_dz)), "/Users/seanlam/Documents/WorkInSZBL/gpet_from_pku/gPET_to_SZBL/Example/input/source_20251027_human/")
-        print_input_file(i, "/Users/seanlam/Documents/WorkInSZBL/gpet_from_pku/gPET_to_SZBL/Example/input/input_20251027_human_crystal_base/")
+        source_dir = "/Users/seanlam/Documents/WorkInSZBL/gpet_from_pku/gPET_to_SZBL/Example/input/source_20251027_human_fix/"
+        input_dir = "/Users/seanlam/Documents/WorkInSZBL/gpet_from_pku/gPET_to_SZBL/Example/input/input_20251027_human_crystal_base_fix/"
+        if not os.path.exists(source_dir):
+            os.makedirs(source_dir)
+        if not os.path.exists(input_dir):
+            os.makedirs(input_dir)
+        print_source_file(i, current_slice, np.round(np.column_stack((current_dx, current_dy, current_dz)), 4), source_dir)
+        print_input_file(i, input_dir)
 
