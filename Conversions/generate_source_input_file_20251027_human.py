@@ -47,8 +47,8 @@ def voxel_center_distance(shape, voxel_size):
     计算三维数组中每个体素中心相对于数组中心的物理距离
 
     参数：
-        shape: 三维数组形状，tuple类型，格式为(D, H, W)
-        voxel_size: 体素大小，tuple类型，格式为(vx, vy, vz)（对应3个维度的物理尺寸）
+        shape: 三维数组形状，tuple类型，格式为(Z, X, Y)
+        voxel_size: 体素大小，tuple类型，格式为(vz, vy, vx)（对应3个维度的物理尺寸）
 
     返回：
         distance: 与输入数组同形状的三维数组，每个元素为对应体素中心到数组中心的物理距离
@@ -175,7 +175,7 @@ thresholder and upholder for energy window (in eV):
 
 
 if __name__ == "__main__":
-    img = np.fromfile("/Users/seanlam/Downloads/recon_20251027_t4_human_wrr_wtof_wengwin_410_610_wnorm_watn_ge_size_it6.img", dtype=np.float32).reshape([71, 384, 384])
+    img = np.fromfile("/share/home/lyj/files/11panel_recon/20251027_human/recon_20251027_t4_human_wrr_wtof_wengwin_410_610_tw1000ps/recon_20251027_t4_human_wrr_wtof_wengwin_410_610_tw1000ps_it6.img", dtype=np.float32).reshape([71, 384, 384]).astype(np.float32)
     for i in range(71):
         img[i, :, :] = zero_outside_radius(img[i, :, :], radius=90)
 
@@ -187,14 +187,14 @@ if __name__ == "__main__":
 
     particle_num = img.copy() * ratio
     particle_sum = particle_num.sum(axis=1).sum(axis=1).max()
-    dx, dy, dz = voxel_center_distance(img.shape, [0.13, 0.13, 0.279])
+    dx, dy, dz = voxel_center_distance(img.shape, [0.279, 0.13, 0.13])
 
     '''
     目前按照每个文件包含一个 slice 的方法只能得到 500w 左右的数据，需要 500w x 2 = 1000w 左右的数据量
     需要根据仿真光子数量自动分片
     '''
     particle_num *= (2 / 10 * 4 * 0.85 * 2)
-    particle_num *= 30
+    particle_num *= 6
     particle_num = particle_num.reshape(-1).astype(int)
     print(particle_num.sum())
     dx = dx.reshape(-1)
@@ -209,7 +209,7 @@ if __name__ == "__main__":
     splits_index = np.zeros_like(particle_num)
     particle_num_copy = particle_num.copy()
     left_index = 0
-    for i in range(999):
+    for i in range(9999):
         cum_sum = np.cumsum(particle_num_copy)
         tail_judge = np.where(cum_sum > 2**30)[0]
         if tail_judge.shape[0] != 0:
@@ -221,15 +221,16 @@ if __name__ == "__main__":
             right_index = particle_num_copy.shape[0]
             splits_index[left_index:right_index] = i
             break
+
     print(splits_index.max())
-    for i in np.unique(splits_index):
+    for i in range(splits_index.max() + 1):
         current_slice = particle_num[splits_index == i]
         current_dx = dx[splits_index == i]
         current_dy = dy[splits_index == i]
         current_dz = dz[splits_index == i]
 
-        source_dir = "/Users/seanlam/Documents/WorkInSZBL/gpet_from_pku/gPET_to_SZBL/Example/input/source_20251027_human_fix_600m/"
-        input_dir = "/Users/seanlam/Documents/WorkInSZBL/gpet_from_pku/gPET_to_SZBL/Example/input/input_20251027_human_crystal_base_fix_600m/"
+        source_dir = "/share/home/lyj/Downloads/gPET_to_SZBL/Example/input/source_20251027_human_fix_600m/"
+        input_dir = "/share/home/lyj/Downloads/gPET_to_SZBL/Example/input/input_20251027_human_fix_600m/"
         if not os.path.exists(source_dir):
             os.makedirs(source_dir)
         if not os.path.exists(input_dir):

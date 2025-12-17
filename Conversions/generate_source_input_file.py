@@ -92,7 +92,7 @@ def print_source_file(index, source_particle, location, dir_path):
         f.write(f"{np.sum(source_particle > 0)}\n")
         f.write(f"Natoms(equal to activity times lamda) type(from isotope file, start from 0), shape type, centerx(cm) centery(cm) centerz(cm) Threecoefftodefineshape# \n")
         for i in range(source_particle.shape[0]):
-            f.write(f"{(source_particle[i]).astype(int)} {0} {0} {location[i, 0]} {location[i, 1]} {location[i, 2]} {0.13} {0.13} {0.279}\n")
+            f.write(f"{(source_particle[i]).astype(int)} {0} {0} {location[i, 0]} {location[i, 1]} {location[i, 2]} {0.1} {0.1} {0.1}\n")
 
 
 def print_input_file(index, dir_path):
@@ -100,14 +100,14 @@ def print_input_file(index, dir_path):
     # 定义需要替换的变量（可根据实际值修改）
     device_number = 0
     noncolinear_angle = 0.0037056
-    phantom_dimension = (384, 384, 71)
-    phantom_offset = (-24.96, -24.96, -9.9045)
-    phantom_size = (49.92, 49.92, 19.809)
-    phantom_material_file = "/share/home/lyj/Downloads/gPET_to_SZBL/Example/input/phantom_20251027_human/20251027_human_index.raw"
-    phantom_density_file = "/share/home/lyj/Downloads/gPET_to_SZBL/Example/input/phantom_20251027_human/20251027_human_density.raw"
+    phantom_dimension = (300, 300, 300)
+    phantom_offset = (-15, -15, -15)
+    phantom_size = (30, 30,30)
+    phantom_material_file = "/share/home/lyj/Downloads/gPET_to_SZBL/Example/input/phantom_72mm_radius_cylinder/cylinder_index.raw"
+    phantom_density_file = "/share/home/lyj/Downloads/gPET_to_SZBL/Example/input/phantom_72mm_radius_cylinder/cylinder_density.raw"
     simulation_history = 0
     use_phase_space_source = 0
-    source_file = "/share/home/lyj/Downloads/gPET_to_SZBL/Example/input/source_20251027_human_fix_600m/sources_%d.txt" % index
+    source_file = "/share/home/lyj/Downloads/gPET_to_SZBL/Example/input/source_20251203_sim_cylinder_30b_scatter/sources_%d.txt" % index
     particle_type = 0
     positron_range_consider = 0
     decay_time = (0, 100)
@@ -175,8 +175,8 @@ thresholder and upholder for energy window (in eV):
 
 
 if __name__ == "__main__":
-    img = np.fromfile("/Users/seanlam/Downloads/recon_20251027_t4_human_wrr_wtof_wengwin_410_610_wnorm_watn_ge_size_it6.img", dtype=np.float32).reshape([71, 384, 384])
-    for i in range(71):
+    img = np.fromfile("//share/home/lyj/Downloads/gPET_to_SZBL/Example/input/phantom_72mm_radius_cylinder/cylinder_index.raw", dtype=np.int32).reshape([300, 300, 300]).astype(np.float32)
+    for i in range(300):
         img[i, :, :] = zero_outside_radius(img[i, :, :], radius=90)
 
     img /= img.max()
@@ -187,14 +187,13 @@ if __name__ == "__main__":
 
     particle_num = img.copy() * ratio
     particle_sum = particle_num.sum(axis=1).sum(axis=1).max()
-    dx, dy, dz = voxel_center_distance(img.shape, [0.13, 0.13, 0.279])
+    dx, dy, dz = voxel_center_distance(img.shape, [0.1, 0.1, 0.1])
 
     '''
     目前按照每个文件包含一个 slice 的方法只能得到 500w 左右的数据，需要 500w x 2 = 1000w 左右的数据量
     需要根据仿真光子数量自动分片
     '''
-    particle_num *= (2 / 10 * 4 * 0.85 * 2)
-    particle_num *= 30
+    particle_num *= (4*30) # target for 3billion scatter
     particle_num = particle_num.reshape(-1).astype(int)
     print(particle_num.sum())
     dx = dx.reshape(-1)
@@ -209,7 +208,8 @@ if __name__ == "__main__":
     splits_index = np.zeros_like(particle_num)
     particle_num_copy = particle_num.copy()
     left_index = 0
-    for i in range(999):
+    i = 0
+    while True:
         cum_sum = np.cumsum(particle_num_copy)
         tail_judge = np.where(cum_sum > 2**30)[0]
         if tail_judge.shape[0] != 0:
@@ -217,19 +217,21 @@ if __name__ == "__main__":
             splits_index[left_index:right_index] = i
             particle_num_copy[left_index:right_index] = 0
             left_index = right_index
+            i += 1
         else:
             right_index = particle_num_copy.shape[0]
             splits_index[left_index:right_index] = i
             break
+
     print(splits_index.max())
-    for i in np.unique(splits_index):
+    for i in range(splits_index.max() + 1):
         current_slice = particle_num[splits_index == i]
         current_dx = dx[splits_index == i]
         current_dy = dy[splits_index == i]
         current_dz = dz[splits_index == i]
 
-        source_dir = "/Users/seanlam/Documents/WorkInSZBL/gpet_from_pku/gPET_to_SZBL/Example/input/source_20251027_human_fix_600m/"
-        input_dir = "/Users/seanlam/Documents/WorkInSZBL/gpet_from_pku/gPET_to_SZBL/Example/input/input_20251027_human_crystal_base_fix_600m/"
+        source_dir = "/share/home/lyj/Downloads/gPET_to_SZBL/Example/input/source_20251203_sim_cylinder_30b_scatter/"
+        input_dir = "/share/home/lyj/Downloads/gPET_to_SZBL/Example/input/input_20251203_sim_cylinder_30b_scatter/"
         if not os.path.exists(source_dir):
             os.makedirs(source_dir)
         if not os.path.exists(input_dir):
