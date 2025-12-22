@@ -26,8 +26,7 @@ class MLEM(ReconOption):
     def get_sense_img(self):
         self.sense_img = np.zeros(self.img_dim)
         for i in tqdm(range(self.scanner_option.crystal_per_layer), desc="calculating sensesitivity image..."):
-            ai = self.projector.projection_forward_lors(self.mu_map, np.ones([self.scanner_option.crystal_per_layer - i]) * i, np.arange(i, self.scanner_option.crystal_per_layer), False)
-            ai = np.exp(-ai)
+            ai = np.exp(-self.projector.projection_forward_lors(self.mu_map, np.ones([self.scanner_option.crystal_per_layer - i]) * i, np.arange(i, self.scanner_option.crystal_per_layer), False))
             self.sense_img += self.projector.projection_backward(
                 start_index=np.ones([self.scanner_option.crystal_per_layer - i]) * i,
                 end_index=np.arange(i, self.scanner_option.crystal_per_layer),
@@ -54,7 +53,7 @@ class MLEM(ReconOption):
         return result
 
     def get_ac_map_update(self):
-        ai = self.projector.projection_forward_lors(self.mu_map, self.measurement[:, 1], self.measurement[:, 2], False)
+        ai = np.exp(-self.projector.projection_forward_lors(self.mu_map, self.measurement[:, 1], self.measurement[:, 2], False))
         ai = np.repeat(ai[:, np.newaxis], self.tof_option.tof_bin_num, axis=1)
         bi = ai * self.projector.projection_forward_lors_wtof(self.ac_map, self.measurement[:, 1], self.measurement[:, 2], False)
         ratio_yi_bi = (self.yi / bi)
@@ -72,15 +71,15 @@ class MLEM(ReconOption):
         self.ac_map = self.set_0_outsize_fov(self.ac_map)
 
     def get_objection_function_score(self):
-        ai = self.projector.projection_forward_lors_wtof(self.mu_map, self.measurement[:, 1], self.measurement[:, 2], False)
-        bi = np.exp(-self.projector.projection_forward_lors_wtof(self.ac_map, self.measurement[:, 1], self.measurement[:, 2], False))
+        ai = np.exp(-self.projector.projection_forward_lors_wtof(self.mu_map, self.measurement[:, 1], self.measurement[:, 2], False))
+        bi = self.projector.projection_forward_lors_wtof(self.ac_map, self.measurement[:, 1], self.measurement[:, 2], False)
         ri = ai * bi
         flag = ri > 0
         score = np.sum(-ri[flag] + self.yi[flag] * np.log(ri[flag]))
         return score
 
     def run(self):
-        iteration = 1000
+        iteration = 5
         self.measurement = self.get_coins_wtof(self.ex_cdf_path, tof_option, 0)
         self.yi = np.zeros([self.measurement.shape[0], self.tof_option.tof_bin_num], dtype=np.float32)
         self.yi[np.arange(self.measurement.shape[0], dtype=int), self.measurement[:, 0]] = self.measurement[:, 3]

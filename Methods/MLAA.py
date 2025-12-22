@@ -53,17 +53,14 @@ class MLAA(ReconOption):
         return result
 
     def get_ac_map_update(self):
-        ai = self.projector.projection_forward_lors(self.mu_map, self.measurement[:, 1], self.measurement[:, 2], False)
-        ai = np.repeat(ai[:, np.newaxis], self.tof_option.tof_bin_num, axis=1)
         bi = self.projector.projection_forward_lors_wtof(self.ac_map, self.measurement[:, 1], self.measurement[:, 2], False)
-        # bi = ai * bi
         ratio_yi_bi = (self.yi / bi)
 
         np.nan_to_num(ratio_yi_bi, copy=False, nan=0, posinf=0, neginf=0)
         ac_update = self.projector.projection_backward_wtof(
             start_index=self.measurement[:, 1],
             end_index=self.measurement[:, 2],
-            sinogram=ratio_yi_bi * ai,
+            sinogram=ratio_yi_bi,
             add_psf=False
         )
         self.get_sense_img()
@@ -106,8 +103,8 @@ class MLAA(ReconOption):
         self.mu_map[wx == 0] = 0
 
     def get_objection_function_score(self):
-        ai = self.projector.projection_forward_lors_wtof(self.mu_map, self.measurement[:, 1], self.measurement[:, 2], False)
-        bi = np.exp(-self.projector.projection_forward_lors_wtof(self.ac_map, self.measurement[:, 1], self.measurement[:, 2], False))
+        ai = np.exp(-self.projector.projection_forward_lors_wtof(self.mu_map, self.measurement[:, 1], self.measurement[:, 2], False))
+        bi = self.projector.projection_forward_lors_wtof(self.ac_map, self.measurement[:, 1], self.measurement[:, 2], False)
         ri = ai * bi
         flag = ri > 0
         score = np.sum(-ri[flag] + self.yi[flag] * np.log(ri[flag]))
