@@ -1,14 +1,12 @@
 import numpy as np
-import array_api_compat.cupy as xp
 import os
 import struct
 from tqdm import tqdm
 from Generals.ReconGenerals import ReconOption
 from Generals.ScannerGenerals import ScannerOption
-from Methods.Projector import Projector
-from Methods.PointSpreadFunction import PointSpreadFunction
+from Generals.Projector import Projector
+from Generals.PointSpreadFunction import PointSpreadFunction
 from Conversions.castor_id_to_sinogram import get_sinogram, check_id_in_sinogram
-from multiprocessing import Pool, Array
 
 
 class OSEM(ReconOption):
@@ -39,7 +37,7 @@ class OSEM(ReconOption):
             self.sense_img.astype(np.float32).tofile(self.output_paths["sense_img_output_path"])
 
     def get_emission_update(self, subset_index):
-        total_counts = os.path.getsize(self.ex_cdf_path) / struct.calcsize("III")
+        total_counts = os.path.getsize(self.ex_cdf_path) / struct.calcsize("IfII")
         subset_size = total_counts / self.num_of_subsets
 
         start_index = subset_index * subset_size
@@ -47,7 +45,7 @@ class OSEM(ReconOption):
 
         # 将 estimate 前投影与 measured 计算误差，在反投影回图像域做更新
         coins = self.get_coins(self.ex_cdf_path, start_index, end_index)
-        estimate_fwd = self.projector.projection_forward_lors(self.estimate, coins[:, 0], coins[:, 1])
+        estimate_fwd = self.projector.projection_forward_lors(self.estimate, coins[:, 0], coins[:, 1], False)
 
         error_fwd = coins[:, 2] / estimate_fwd
         np.nan_to_num(error_fwd, copy=False, nan=0, posinf=0, neginf=0)
@@ -131,43 +129,23 @@ class OSEM(ReconOption):
 
 
 if __name__ == "__main__":
-    os.chdir(r"/share/home/lyj/files/git-project/pet-reconstuction/")
-    scanner_option = ScannerOption(
-        "PET_FOR_BRAIN_11panel_DOI0",
-    )
-    psf_option = PointSpreadFunction(sigma=1)
-    tx_osem = OSEM(
+    os.chdir(r"D:\github_code\pet-reconstruction")
+    scanner_option = ScannerOption("WBBrain_20251219")
+
+    # psf_option = PointSpreadFunction(sigma=1)
+    ex_osem = OSEM(
         img_dim=np.array([170, 170, 170]),
         voxel_size=np.array([1, 1, 1]),
-        output_dir=r"path/to/output",
+        output_dir=r"D:\BaiduNetdiskDownload\data_for_mlaa\test_output",
         scanner_option=scanner_option,
-        # ex_cdf_path=None,
-        tx_cdf_path=r"path/to/tx_cdf",
-        bx_cdf_path=r"path/to/bx_cdf",
-        num_of_iterations=4,
-        num_of_subsets=3,
+        ex_cdf_path=r"D:\BaiduNetdiskDownload\data_for_mlaa\trues.cdf",
+        tx_cdf_path=r"",
+        bx_cdf_path=r"",
+        num_of_iterations=3,
+        num_of_subsets=1,
         use_ssrb=False,
         psf_option=None,
-        device_id=1
+        device_id=0
     )
 
-    tx_osem.run()
-    del tx_osem
-
-    tx_osem = OSEM(
-        img_dim=np.array([170, 170, 170]),
-        voxel_size=np.array([1, 1, 1]),
-        output_dir=r"path/to/output",
-        scanner_option=scanner_option,
-        # ex_cdf_path=None,
-        tx_cdf_path=r"path/to/tx_cdf",
-        bx_cdf_path=r"path/to/bx_cdf",
-        num_of_iterations=4,
-        num_of_subsets=3,
-        use_ssrb=True,
-        psf_option=None,
-        device_id=1
-    )
-
-    tx_osem.run()
-
+    ex_osem.run()
