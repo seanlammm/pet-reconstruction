@@ -104,19 +104,16 @@ class ReconOption:
 
         coins = np.frombuffer(data, dtype=current_dtype)
         coins = np.column_stack((coins["castor_id_1"], coins["castor_id_2"], coins["tof"]))
-
         # 这里为了避免后续有重复的 id 相反的 LOR，决定把小 id 放在 id1 ，大 id 放 id2
         # 在后续读取 tof 时要注意将 tof 置反
         flip_flag = coins[:, 0] > coins[:, 1]
-        coins[flip_flag, 0], coins[flip_flag, 1], coins[flip_flag, 2] = coins[flip_flag, 1].copy(), coins[flip_flag, 0].copy(), -coins[flip_flag, 2]
-
+        coins[flip_flag, 0], coins[flip_flag, 1], coins[flip_flag, 2] = coins[flip_flag, 1].copy(), coins[flip_flag, 0].copy(), -coins[flip_flag, 2].copy()
         # TOF bin 从 -max(tof) 到 max(tof)，tof_bin_num 需要单数
-        tof_range = [-tof_option.tof_bin_num * tof_option.tof_bin_width_in_ps / 2, tof_option.tof_bin_num * tof_option.tof_bin_width_in_ps / 2]
-        tof_interval = np.linspace(tof_range[0], tof_range[1], tof_option.tof_bin_num + 1)
 
         # out_of_range = (coins[:, 2] < tof_range[0]) | (coins[:, 2] >= tof_range[1])
         # coins = coins[~out_of_range, :]
-        tof_bin_index = np.digitize(coins[:, 2], bins=tof_interval) - 1
+        tof_pos = coins[:, 2] * tof_option.light_speed / 2
+        tof_bin_index = np.digitize(tof_pos, tof_option.tof_bin_edges) - 1
         tof_bin_index[tof_bin_index < 0] = 0
         tof_bin_index[tof_bin_index >= tof_option.tof_bin_num] = tof_option.tof_bin_num - 1
 
@@ -124,12 +121,12 @@ class ReconOption:
         uni_coins, uni_row_index = np.unique(coins_1d, return_inverse=True)
         coins_id_1 = uni_coins // self.scanner_option.crystal_num
         coins_id_2 = uni_coins % self.scanner_option.crystal_num
-        coins = np.column_stack((coins_id_1, coins_id_2))
-        histo = np.zeros([coins.shape[0], self.tof_option.tof_bin_num], dtype=int)
+        uni_coins = np.column_stack((coins_id_1, coins_id_2))
+        histo = np.zeros([uni_coins.shape[0], tof_option.tof_bin_num], dtype=int)
         np.add.at(histo, tuple(np.column_stack((uni_row_index, tof_bin_index)).astype(int).T), 1)
 
         # coins = [id_1, id2], histo = [n_events, tof_bin]
-        return coins.astype(int), histo
+        return uni_coins.astype(int), histo
 
 
 

@@ -53,7 +53,7 @@ class MLEM(ReconOption):
         return result
 
     def get_ac_map_update(self):
-        bi = self.projector.projection_forward_lors_wtof(self.ac_map, self.events_LOR[:, 0],self.events_LOR[:, 1], False)
+        bi = self.projector.projection_forward_lors_wtof(self.ac_map, self.events_LOR[:, 0], self.events_LOR[:, 1], False)
         ratio_yi_bi = (self.yi / bi)
 
         np.nan_to_num(ratio_yi_bi, copy=False, nan=0, posinf=0, neginf=0)
@@ -80,28 +80,29 @@ class MLEM(ReconOption):
         iteration = 5
         self.events_LOR, self.yi = self.get_coins_wtof(self.ex_cdf_path, tof_option, 0)
         # self.get_sense_img()
-        self.sense_img = np.fromfile(r"D:\BaiduSyncdisk\data_for_mlaa\test_output\tof_mlem_ac\sense_img.raw", dtype=np.float32).reshape([170, 170, 170])
+        self.sense_img = np.fromfile(self.output_dir + r"\sense_img.raw", dtype=np.float32).reshape([170, 170, 170])
+        # self.sense_img = np.fromfile(r"C:\Users\ct-guys\Downloads\sens_SmartBraintPET_atten_170.bin", dtype=np.float32).reshape([170, 170, 170]).transpose([2,1,0])
         obj_func_score = np.zeros(iteration)
         for i in range(iteration):
             self.get_ac_map_update()
             self.ac_map.astype(np.float32).tofile(self.output_dir + r"\ac_map_it%d.raw" % i)
             obj_func_score[i] = self.get_objection_function_score()
-            obj_func_score.astype(np.float32).tofile(self.output_dir + r"\score.raw")
+        obj_func_score.astype(np.float32).tofile(self.output_dir + r"\score.raw")
 
 
 if __name__ == "__main__":
-    os.chdir(r"D:\github_code\pet-reconstruction")
+    os.chdir(r"D:\linyuejie\git-project\pet-reconstruction-in-github")
     scanner_option = ScannerOption("WBBrain_20251219")
     ac_map = np.ones([170, 170, 170])
-    mu_map = np.flip(np.fromfile(r"D:\BaiduSyncdisk\data_for_mlaa\clear_mumap_dim170.raw", dtype=np.float32).reshape(170, 170, 170).transpose([2, 1, 0]), axis=1)
+    mu_map = np.flip(np.fromfile(r"D:\linyuejie\BaiduSyncdisk\data_for_mlaa\clear_mumap_dim170.raw", dtype=np.float32).reshape(170, 170, 170).transpose([2, 1, 0]), axis=1)
     psf_option = PointSpreadFunction(sigma=1)
-    tof_option = TOFOption(tof_resolution=300, tof_bin_num=21, tof_bin_width_in_ps=100)
+    tof_option = TOFOption(tof_resolution=300, tof_bin_num=21, tof_range_in_ps=1000)
     mlem = MLEM(
         img_dim=np.array([170, 170, 170]),
         voxel_size=np.array([1, 1, 1]),
-        output_dir=r"D:\BaiduSyncdisk\data_for_mlaa\test_output\tof_mlem",
+        output_dir=r"D:\linyuejie\BaiduSyncdisk\data_for_mlaa\test_output\tof_mlem",
         scanner_option=scanner_option,
-        ex_cdf_path=r"D:\BaiduSyncdisk\data_for_mlaa\trues.cdf",
+        ex_cdf_path=r"D:\linyuejie\BaiduSyncdisk\data_for_mlaa\trues.cdf",
         psf_option=psf_option,
         device_id=0,
         ac_map=ac_map,
