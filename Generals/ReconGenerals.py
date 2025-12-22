@@ -114,21 +114,22 @@ class ReconOption:
         tof_range = [-tof_option.tof_bin_num * tof_option.tof_bin_width_in_ps / 2, tof_option.tof_bin_num * tof_option.tof_bin_width_in_ps / 2]
         tof_interval = np.linspace(tof_range[0], tof_range[1], tof_option.tof_bin_num + 1)
 
-        out_of_range = (coins[:, 2] < tof_range[0]) | (coins[:, 2] >= tof_range[1])
-        coins = coins[~out_of_range, :]
+        # out_of_range = (coins[:, 2] < tof_range[0]) | (coins[:, 2] >= tof_range[1])
+        # coins = coins[~out_of_range, :]
         tof_bin_index = np.digitize(coins[:, 2], bins=tof_interval) - 1
+        tof_bin_index[tof_bin_index < 0] = 0
+        tof_bin_index[tof_bin_index >= tof_option.tof_bin_num] = tof_option.tof_bin_num - 1
 
-        coins_1d = tof_bin_index * self.scanner_option.crystal_num ** 2 + coins[:, 0] * self.scanner_option.crystal_num + coins[:, 1]
-        uni_coins, uni_counts = np.unique(coins_1d, return_counts=True, axis=0)
-        coins_tof = uni_coins // (self.scanner_option.crystal_num ** 2)
-        coins_id_1 = (uni_coins % (self.scanner_option.crystal_num ** 2)) // self.scanner_option.crystal_num
+        coins_1d = coins[:, 0] * self.scanner_option.crystal_num + coins[:, 1]
+        uni_coins, uni_row_index = np.unique(coins_1d, return_inverse=True)
+        coins_id_1 = uni_coins // self.scanner_option.crystal_num
         coins_id_2 = uni_coins % self.scanner_option.crystal_num
-        coins = np.column_stack((
-            coins_tof, coins_id_1.reshape(-1, 1), coins_id_2.reshape(-1, 1), uni_counts.reshape(-1, 1)
-        ))
+        coins = np.column_stack((coins_id_1, coins_id_2))
+        histo = np.zeros([coins.shape[0], self.tof_option.tof_bin_num], dtype=int)
+        np.add.at(histo, tuple(np.column_stack((uni_row_index, tof_bin_index)).astype(int).T), 1)
 
-        # coins = [tof_index, id_1, id2, counts]
-        return coins.astype(int)
+        # coins = [id_1, id2], histo = [n_events, tof_bin]
+        return coins.astype(int), histo
 
 
 
