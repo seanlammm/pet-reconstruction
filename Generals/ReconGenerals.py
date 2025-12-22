@@ -9,7 +9,7 @@ class ReconOption:
     def __init__(self, img_dim: np.array, voxel_size: np.array, ex_cdf_path: str, tx_cdf_path: str, bx_cdf_path: str, output_dir: str, scanner_option: ScannerOption, psf_option: PointSpreadFunction, num_of_iterations, num_of_subsets, device_id):
         self.img_dim = img_dim
         self.voxel_size = voxel_size
-        self.img_origin = -(img_dim / 2 + 0.5) * voxel_size
+        self.img_origin = -(img_dim / 2 - 0.5) * voxel_size
         self.num_of_iterations = num_of_iterations
         self.num_of_subsets = num_of_subsets
         self.output_dir = output_dir

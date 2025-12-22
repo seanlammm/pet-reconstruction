@@ -26,7 +26,8 @@ class MLEM(ReconOption):
     def get_sense_img(self):
         self.sense_img = np.zeros(self.img_dim)
         for i in tqdm(range(self.scanner_option.crystal_per_layer), desc="calculating sensesitivity image..."):
-            ai = np.exp(-self.projector.projection_forward_lors(self.mu_map, np.ones([self.scanner_option.crystal_per_layer - i]) * i, np.arange(i, self.scanner_option.crystal_per_layer), False))
+            ai = self.projector.projection_forward_lors(self.mu_map, np.ones([self.scanner_option.crystal_per_layer - i]) * i, np.arange(i, self.scanner_option.crystal_per_layer), False)
+            ai = np.exp(-ai)
             self.sense_img += self.projector.projection_backward(
                 start_index=np.ones([self.scanner_option.crystal_per_layer - i]) * i,
                 end_index=np.arange(i, self.scanner_option.crystal_per_layer),
@@ -69,7 +70,8 @@ class MLEM(ReconOption):
         self.ac_map = self.set_0_outsize_fov(self.ac_map)
 
     def get_objection_function_score(self):
-        ai = np.exp(-self.projector.projection_forward_lors_wtof(self.mu_map, self.events_LOR[:, 0], self.events_LOR[:, 1], False))
+        ai = np.exp(-self.projector.projection_forward_lors(self.mu_map, self.events_LOR[:, 0], self.events_LOR[:, 1], False))
+        ai = np.repeat(ai[:, np.newaxis], self.tof_option.tof_bin_num, axis=1)
         bi = self.projector.projection_forward_lors_wtof(self.ac_map, self.events_LOR[:, 0], self.events_LOR[:, 1], False)
         ri = ai * bi
         flag = ri > 0
@@ -79,8 +81,8 @@ class MLEM(ReconOption):
     def run(self):
         iteration = 5
         self.events_LOR, self.yi = self.get_coins_wtof(self.ex_cdf_path, tof_option, 0)
-        # self.get_sense_img()
-        self.sense_img = np.fromfile(self.output_dir + r"\sense_img.raw", dtype=np.float32).reshape([170, 170, 170])
+        self.get_sense_img()
+        # self.sense_img = np.fromfile(self.output_dir + r"\sense_img.raw", dtype=np.float32).reshape([170, 170, 170])
         # self.sense_img = np.fromfile(r"C:\Users\ct-guys\Downloads\sens_SmartBraintPET_atten_170.bin", dtype=np.float32).reshape([170, 170, 170]).transpose([2,1,0])
         obj_func_score = np.zeros(iteration)
         for i in range(iteration):

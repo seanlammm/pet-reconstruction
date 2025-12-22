@@ -18,7 +18,7 @@ class MLAA(ReconOption):
         self.mu_map = mu_map / 10
         self.tof_option = tof_option
         self.sense_img = None
-        self.measurement = None
+        self.events_LOR = None
         self.yi = None
         self.alpha_p = 0.1
         self.n = 170
@@ -53,13 +53,12 @@ class MLAA(ReconOption):
         return result
 
     def get_ac_map_update(self):
-        bi = self.projector.projection_forward_lors_wtof(self.ac_map, self.measurement[:, 1], self.measurement[:, 2], False)
+        bi = self.projector.projection_forward_lors_wtof(self.ac_map, self.events_LOR[:, 0], self.events_LOR[:, 1], False)
         ratio_yi_bi = (self.yi / bi)
-
         np.nan_to_num(ratio_yi_bi, copy=False, nan=0, posinf=0, neginf=0)
         ac_update = self.projector.projection_backward_wtof(
-            start_index=self.measurement[:, 1],
-            end_index=self.measurement[:, 2],
+            start_index=self.events_LOR[:, 0],
+            end_index=self.events_LOR[:, 1],
             sinogram=ratio_yi_bi,
             add_psf=False
         )
@@ -70,14 +69,15 @@ class MLAA(ReconOption):
         self.ac_map = self.set_0_outsize_fov(self.ac_map)
 
     def get_mu_map_update(self):
-        bi = self.projector.projection_forward_lors_wtof(self.ac_map, self.measurement[:, 1], self.measurement[:, 2], False)
-        ai = np.exp(-self.projector.projection_forward_lors_wtof(self.mu_map, self.measurement[:, 1], self.measurement[:, 2], False))
-        bp_aibi = self.projector.projection_backward_wtof(self.measurement[:, 1], self.measurement[:, 2], (ai * bi), False)
-        bp_yi = self.projector.projection_backward_wtof(self.measurement[:, 1], self.measurement[:, 2], self.yi, False)
+        bi = self.projector.projection_forward_lors_wtof(self.ac_map, self.events_LOR[:, 0], self.events_LOR[:, 1], False)
+        ai = np.exp(-self.projector.projection_forward_lors(self.mu_map, self.events_LOR[:, 0], self.events_LOR[:, 1], False))
+        ai = np.repeat(ai[:, np.newaxis], self.tof_option.tof_bin_num, axis=1)
+        bp_aibi = self.projector.projection_backward_wtof(self.events_LOR[:, 0], self.events_LOR[:, 1], (ai * bi), False)
+        bp_yi = self.projector.projection_backward_wtof(self.events_LOR[:, 0], self.events_LOR[:, 1], self.yi, False)
         mu_update = (self.alpha_p / self.n) * (1 - bp_yi / bp_aibi)
         np.nan_to_num(mu_update, copy=False, nan=0, posinf=0, neginf=0)
+        mu_update = self.set_0_outsize_fov(mu_update)
         self.mu_map += mu_update
-        self.mu_map = self.set_0_outsize_fov(self.mu_map)
 
     def get_attn_ml_sps(self):
         # from kernel MLAA
@@ -103,8 +103,9 @@ class MLAA(ReconOption):
         self.mu_map[wx == 0] = 0
 
     def get_objection_function_score(self):
-        ai = np.exp(-self.projector.projection_forward_lors_wtof(self.mu_map, self.measurement[:, 1], self.measurement[:, 2], False))
-        bi = self.projector.projection_forward_lors_wtof(self.ac_map, self.measurement[:, 1], self.measurement[:, 2], False)
+        ai = np.exp(-self.projector.projection_forward_lors(self.mu_map, self.events_LOR[:, 0], self.events_LOR[:, 1], False))
+        ai = np.repeat(ai[:, np.newaxis], self.tof_option.tof_bin_num, axis=1)
+        bi = self.projector.projection_forward_lors_wtof(self.ac_map, self.events_LOR[:, 0], self.events_LOR[:, 1], False)
         ri = ai * bi
         flag = ri > 0
         score = np.sum(-ri[flag] + self.yi[flag] * np.log(ri[flag]))
@@ -112,11 +113,9 @@ class MLAA(ReconOption):
 
     def run(self):
         iteration = 1000
-        self.measurement = self.get_coins_wtof(self.ex_cdf_path, tof_option, 0)
-        self.yi = np.zeros([self.measurement.shape[0], self.tof_option.tof_bin_num], dtype=np.float32)
-        self.yi[np.arange(self.measurement.shape[0], dtype=int), self.measurement[:, 0]] = self.measurement[:, 3]
-        # self.get_sense_img()
-        self.sense_img = np.fromfile(r"D:\linyuejie\BaiduSyncdisk\data_for_mlaa\test_output\tof_mlem_ac\sense_img.raw", dtype=np.float32).reshape([170, 170, 170])
+        self.events_LOR, self.yi = self.get_coins_wtof(self.ex_cdf_path, tof_option, 0)
+        self.get_sense_img()
+        # self.sense_img = np.fromfile(r"D:\linyuejie\BaiduSyncdisk\data_for_mlaa\test_output\tof_mlem\sense_img.raw", dtype=np.float32).reshape([170, 170, 170])
         obj_func_score = np.zeros(iteration)
         for i in range(iteration):
             self.get_ac_map_update()
@@ -137,7 +136,7 @@ if __name__ == "__main__":
     ac_map = np.ones([170, 170, 170])
     mu_map = np.flip(np.fromfile(r"D:\linyuejie\BaiduSyncdisk\data_for_mlaa\initial_mumap_dim170.raw", dtype=np.float32).reshape(170, 170, 170).transpose([2, 1, 0]), axis=1)
     psf_option = PointSpreadFunction(sigma=1)
-    tof_option = TOFOption(tof_resolution=300, tof_bin_num=21, tof_bin_width_in_ps=100)
+    tof_option = TOFOption(tof_resolution=300, tof_bin_num=21, tof_range_in_ps=1000)
     mlaa = MLAA(
         img_dim=np.array([170, 170, 170]),
         voxel_size=np.array([1, 1, 1]),

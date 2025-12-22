@@ -57,7 +57,7 @@ class Projector:
             xstart=xp.asarray(current_pos_comb[:, :3]),
             xend=xp.asarray(current_pos_comb[:, 3:]),
             img=xp.asarray(img),
-            img_origin=self.recon_option.img_origin,
+            img_origin=xp.asarray(self.recon_option.img_origin),
             voxsize=xp.asarray(self.recon_option.voxel_size)
         )
         np.nan_to_num(forward_img, copy=False, nan=0, posinf=0, neginf=0)
