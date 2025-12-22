@@ -1,4 +1,4 @@
-from Methods.Projector import Projector
+from Generals.Projector import Projector
 from Generals.ScannerGenerals import ScannerOption
 from Generals.ReconGenerals import ReconOption
 import numpy as np
