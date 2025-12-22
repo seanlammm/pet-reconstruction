@@ -1,8 +1,9 @@
 import os.path
+from tqdm import tqdm
 import numpy as np
+import struct
 from Generals.ScannerGenerals import ScannerOption
-from Generals.PointSpreadFunction import PointSpreadFunction
-from Generals.TOFGeneranls import TOFOption
+from Methods.PointSpreadFunction import PointSpreadFunction
 
 
 class ReconOption:
@@ -23,8 +24,6 @@ class ReconOption:
         self.scan_type = "emission" if ex_cdf_path is not None else "transmission"
 
     def construct_output_path(self):
-        if not os.path.exists(self.output_dir):
-            os.makedirs(self.output_dir)
         path_dict = {
             "sense_img_output_path": os.path.join(self.output_dir, "sensetivity_img.raw"),
             "lin_int_proj_output_path": os.path.join(self.output_dir, "linear_integral_projection.raw"),
@@ -58,11 +57,11 @@ class ReconOption:
         return pos_comb
 
     def get_coins(self, cdf_path, start_index, end_index=None):
-        current_dtype = [('time', 'i4'), ('tof', 'f4'), ('castor_id_1', 'i4'), ('castor_id_2', 'i4')]
+        current_dtype = [('time', 'i4'), ('castor_id_1', 'i4'), ('castor_id_2', 'i4')]
         block_size = np.empty(0, dtype=current_dtype).itemsize
-        event_num = os.path.getsize(cdf_path) / block_size
-        if end_index is None or end_index > event_num:
-            end_index = event_num
+        file_size = os.path.getsize(cdf_path) / block_size
+        if end_index is None or end_index > file_size:
+            end_index = file_size
 
         start_index = int(start_index)
         end_index = int(end_index)
@@ -76,59 +75,18 @@ class ReconOption:
         # 这里为了避免后续有重复的 id 相反的 LOR，决定把小 id 放在 id1 ，大 id 放 id2
         # 在后续读取 tof 时要注意将 tof 置反
         flip_flag = coins[:, 0] > coins[:, 1]
-        coins[flip_flag, 0], coins[flip_flag, 1] = coins[flip_flag, 1].copy(), coins[flip_flag, 0].copy()
+        swap = coins[flip_flag, 0].copy()
+        coins[flip_flag, 0] = coins[flip_flag, 1]
+        coins[flip_flag, 1] = swap
+        del swap
 
-        coins_1d = coins[:, 0] * self.scanner_option.crystal_num + coins[:, 1]
-        uni_coins, uni_counts = np.unique(coins_1d, return_counts=True, axis=0)
-        coins_id_1 = uni_coins // self.scanner_option.crystal_num
-        coins_id_2 = uni_coins % self.scanner_option.crystal_num
+        uni_coins, uni_counts = np.unique(coins, return_counts=True, axis=0)
         coins = np.concatenate((
-            coins_id_1.reshape(-1, 1), coins_id_2.reshape(-1, 1), uni_counts.reshape(-1, 1)
+            uni_coins, uni_counts.reshape(-1, 1)
         ), axis=1)
 
         # coins = [id_1, id2, counts]
         return coins
-
-    def get_coins_wtof(self, cdf_path, tof_option: TOFOption, start_index, end_index=None):
-        current_dtype = [('time', 'i4'), ('tof', 'f4'), ('castor_id_1', 'i4'), ('castor_id_2', 'i4')]
-        block_size = np.empty(0, dtype=current_dtype).itemsize
-        event_num = os.path.getsize(cdf_path) / block_size
-        if end_index is None or end_index > event_num:
-            end_index = event_num
-
-        start_index = int(start_index)
-        end_index = int(end_index)
-        with open(cdf_path, 'rb') as f:
-            f.seek(block_size * start_index)
-            data = f.read(block_size * (end_index - start_index))
-
-        coins = np.frombuffer(data, dtype=current_dtype)
-        coins = np.column_stack((coins["castor_id_1"], coins["castor_id_2"], coins["tof"]))
-
-        # 这里为了避免后续有重复的 id 相反的 LOR，决定把小 id 放在 id1 ，大 id 放 id2
-        # 在后续读取 tof 时要注意将 tof 置反
-        flip_flag = coins[:, 0] > coins[:, 1]
-        coins[flip_flag, 0], coins[flip_flag, 1], coins[flip_flag, 2] = coins[flip_flag, 1].copy(), coins[flip_flag, 0].copy(), -coins[flip_flag, 2]
-
-        # TOF bin 从 -max(tof) 到 max(tof)，tof_bin_num 需要单数
-        tof_range = [-tof_option.tof_bin_num * tof_option.tof_bin_width_in_ps / 2, tof_option.tof_bin_num * tof_option.tof_bin_width_in_ps / 2]
-        tof_interval = np.linspace(tof_range[0], tof_range[1], tof_option.tof_bin_num + 1)
-
-        out_of_range = (coins[:, 2] < tof_range[0]) | (coins[:, 2] >= tof_range[1])
-        coins = coins[~out_of_range, :]
-        tof_bin_index = np.digitize(coins[:, 2], bins=tof_interval) - 1
-
-        coins_1d = tof_bin_index * self.scanner_option.crystal_num ** 2 + coins[:, 0] * self.scanner_option.crystal_num + coins[:, 1]
-        uni_coins, uni_counts = np.unique(coins_1d, return_counts=True, axis=0)
-        coins_tof = uni_coins // (self.scanner_option.crystal_num ** 2)
-        coins_id_1 = (uni_coins % (self.scanner_option.crystal_num ** 2)) // self.scanner_option.crystal_num
-        coins_id_2 = uni_coins % self.scanner_option.crystal_num
-        coins = np.column_stack((
-            coins_tof, coins_id_1.reshape(-1, 1), coins_id_2.reshape(-1, 1), uni_counts.reshape(-1, 1)
-        ))
-
-        # coins = [tof_index, id_1, id2, counts]
-        return coins.astype(int)
 
 
 

@@ -59,9 +59,10 @@
 import array_api_compat.cupy as xp
 import numpy as np
 from Applications.AppGeneral import AppGeneral
-from Generals.Projector import Projector
+from Methods.Projector import Projector
 from Generals.ReconGenerals import ReconOption
 from Generals.ScannerGenerals import ScannerOption
+from tqdm import tqdm
 
 
 class MumapToAttenuationCorrectionFactor(AppGeneral):

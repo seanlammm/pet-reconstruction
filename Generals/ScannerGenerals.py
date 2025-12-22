@@ -18,7 +18,6 @@ class ScannerOption:
         self.crystals_size_xy = float(self.geometry_dict["crystals size transaxial"])
         self.crystals_size_z = float(self.geometry_dict["crystals size axial"])
         self.crystals_depth = int(self.geometry_dict["crystals size depth"])
-        self.scanner_radius = float(self.geometry_dict["scanner radius"]) - 1
         self.crystals_position = np.fromfile("./Geometries/%s.glut" % scanner, dtype=np.float32).reshape([-1, 6])[:, :3]
         self.crystals_norm_vector = np.fromfile("./Geometries/%s.glut" % scanner, dtype=np.float32).reshape([-1, 6])[:, 3:]
 
