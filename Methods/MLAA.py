@@ -26,15 +26,15 @@ class MLAA(ReconOption):
     def get_sense_img(self):
         self.sense_img = np.zeros(self.img_dim)
         for i in tqdm(range(self.scanner_option.crystal_per_layer), desc="calculating sensesitivity image..."):
-            ai = self.projector.projection_forward_lors_wtof(self.mu_map, np.ones([self.scanner_option.crystal_per_layer - i]) * i, np.arange(i, self.scanner_option.crystal_per_layer), False)
+            ai = self.projector.projection_forward_lors(self.mu_map, np.ones([self.scanner_option.crystal_per_layer - i]) * i, np.arange(i, self.scanner_option.crystal_per_layer), False)
             ai = np.exp(-ai)
-            self.sense_img += self.projector.projection_backward_wtof(
+            self.sense_img += self.projector.projection_backward(
                 start_index=np.ones([self.scanner_option.crystal_per_layer - i]) * i,
                 end_index=np.arange(i, self.scanner_option.crystal_per_layer),
-                sinogram=np.ones([self.scanner_option.crystal_per_layer - i, self.tof_option.tof_bin_num]),
+                counts=ai,
                 add_psf=False
             )
-        self.sense_img.tofile(self.output_dir + "/sense_img.raw")
+        self.sense_img.astype(np.float32).tofile(self.output_dir + "/sense_img.raw")
 
     def set_0_outsize_fov(self, img):
         h, w = img.shape[:2]  # 获取图像高度和宽度（忽略通道数）
@@ -54,17 +54,22 @@ class MLAA(ReconOption):
         return result
 
     def get_ac_map_update(self):
+        ai = self.projector.projection_forward_lors(self.mu_map, self.measurement[:, 1], self.measurement[:, 2], False)
+        ai = np.repeat(ai[:, np.newaxis], self.tof_option.tof_bin_num, axis=1)
         ac_fwd = self.projector.projection_forward_lors_wtof(self.ac_map, self.measurement[:, 1], self.measurement[:, 2], False, 1)
+        ac_fwd *= ai
+        ratio_yi_bi = (self.yi * ai / ac_fwd)
+        np.nan_to_num(ratio_yi_bi, copy=False, nan=0, posinf=0, neginf=0)
         ac_update = self.projector.projection_backward_wtof(
             start_index=self.measurement[:, 1],
             end_index=self.measurement[:, 2],
-            sinogram=(self.yi / ac_fwd),
+            sinogram=ratio_yi_bi,
             add_psf=False
         )
         # self.get_sense_img()
         self.ac_map = self.ac_map / self.sense_img * ac_update
         self.ac_map[self.sense_img == 0] = 0
-        np.nan_to_num(self.ac_map, copy=False, nan=1e-8, posinf=1e-8, neginf=1e-8)
+        np.nan_to_num(self.ac_map, copy=False, nan=0, posinf=0, neginf=0)
         self.ac_map = self.set_0_outsize_fov(self.ac_map)
 
 
@@ -74,9 +79,8 @@ class MLAA(ReconOption):
         bp_aibi = self.projector.projection_backward_wtof(self.measurement[:, 1], self.measurement[:, 2], (ai * bi), False)
         bp_yi = self.projector.projection_backward_wtof(self.measurement[:, 1], self.measurement[:, 2], self.yi, False)
         mu_update = (self.alpha_p / self.n) * (1 - bp_yi / bp_aibi)
-        np.nan_to_num(mu_update, copy=False, nan=1e-8, posinf=1e-8, neginf=1e-8)
+        np.nan_to_num(mu_update, copy=False, nan=0, posinf=0, neginf=0)
         self.mu_map += mu_update
-        self.mu_map[self.mu_map < 0] = 1e-8
         self.mu_map = self.set_0_outsize_fov(self.mu_map)
 
     def get_attn_ml_sps(self):
@@ -103,18 +107,20 @@ class MLAA(ReconOption):
         self.mu_map[wx == 0] = 0
 
     def get_objection_function_score(self):
-        ai = self.projector.projection_forward_lors(self.mu_map, self.measurement[:, 0], self.measurement[:, 1], False)
-        bi = np.exp(-self.projector.projection_forward_lors(self.ac_map, self.measurement[:, 0], self.measurement[:, 1], False))
+        ai = self.projector.projection_forward_lors_wtof(self.mu_map, self.measurement[:, 1], self.measurement[:, 2], False)
+        bi = np.exp(-self.projector.projection_forward_lors_wtof(self.ac_map, self.measurement[:, 1], self.measurement[:, 2], False))
         ri = ai * bi
-        score = np.sum(-ri + self.measurement[:, 2] * np.log(ri))
+        flag = ri > 0
+        score = np.sum(-ri[flag] + self.yi[flag] * np.log(ri[flag]))
         return score
 
     def run(self):
-        iteration = 50
+        iteration = 20
         self.measurement = self.get_coins_wtof(self.ex_cdf_path, tof_option, 0)
-        self.yi = np.ones([self.measurement.shape[0], self.tof_option.tof_bin_num], dtype=np.float32) * 1e-8
+        self.yi = np.zeros([self.measurement.shape[0], self.tof_option.tof_bin_num], dtype=np.float32)
         self.yi[np.arange(self.measurement.shape[0], dtype=int), self.measurement[:, 0]] = self.measurement[:, 3]
-        self.get_sense_img()
+        # self.get_sense_img()
+        self.sense_img = np.fromfile(r"D:\linyuejie\BaiduSyncdisk\data_for_mlaa\test_output\tof_mlem_ac\sense_img.raw", dtype=np.float32).reshape([170, 170, 170])
         obj_func_score = np.zeros(iteration)
         for i in range(iteration):
             self.get_ac_map_update()
@@ -126,23 +132,23 @@ class MLAA(ReconOption):
             # plt.plot(obj_func_score)
             # plt.scatter(np.arange(iteration), obj_func_score, s=30, marker="*")
             # plt.savefig(r"D:\BaiduNetdiskDownload\data_for_mlaa\test_output\tof_mlaa\score.jpg", bbox_inches="tight")
-        obj_func_score.astype(np.float32).tofile(r"D:\BaiduNetdiskDownload\data_for_mlaa\test_output\tof_mlem_noac\score.raw")
+        obj_func_score.astype(np.float32).tofile(self.output_dir + r"\score.raw")
 
 
 
 if __name__ == "__main__":
-    os.chdir(r"D:\github_code\pet-reconstruction")
+    os.chdir(r"D:\linyuejie\git-project\pet-reconstruction-in-github")
     scanner_option = ScannerOption("WBBrain_20251219")
     ac_map = np.ones([170, 170, 170])
-    mu_map = np.fromfile(r"D:\BaiduNetdiskDownload\data_for_mlaa\clear_mumap_dim170.raw", dtype=np.float32).reshape(170, 170, 170).transpose([2, 1, 0])
+    mu_map = np.flip(np.fromfile(r"D:\linyuejie\BaiduSyncdisk\data_for_mlaa\clear_mumap_dim170.raw", dtype=np.float32).reshape(170, 170, 170).transpose([2, 1, 0]), axis=1)
     psf_option = PointSpreadFunction(sigma=1)
     tof_option = TOFOption(tof_resolution=300, tof_bin_num=21, tof_bin_width_in_ps=100)
     mlaa = MLAA(
         img_dim=np.array([170, 170, 170]),
         voxel_size=np.array([1, 1, 1]),
-        output_dir=r"D:\BaiduNetdiskDownload\data_for_mlaa\test_output\tof_mlem_noac",
+        output_dir=r"D:\linyuejie\BaiduSyncdisk\data_for_mlaa\test_output\tof_mlem_ac",
         scanner_option=scanner_option,
-        ex_cdf_path=r"D:\BaiduNetdiskDownload\data_for_mlaa\trues.cdf",
+        ex_cdf_path=r"D:\linyuejie\BaiduSyncdisk\data_for_mlaa\trues.cdf",
         psf_option=psf_option,
         device_id=0,
         ac_map=ac_map,

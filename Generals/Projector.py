@@ -60,23 +60,21 @@ class Projector:
             img_origin=self.recon_option.img_origin,
             voxsize=self.recon_option.voxel_size
         )
-        np.nan_to_num(forward_img, copy=False, nan=1e-8, posinf=1e-8, neginf=1e-8)
-        forward_img[forward_img == 0] = 1e-8
-        return parallelproj.backend.to_numpy_array(forward_img)
+        np.nan_to_num(forward_img, copy=False, nan=0, posinf=0, neginf=0)
+        return parallelproj.backend.to_numpy_array(forward_img.astype(xp.float32))
 
-    def projection_backward(self, sinogram, add_psf=False):  # sinogram = [id1, id2, counts]
-        current_pos_comb = self.recon_option.get_lor_location(sinogram[:, 0], sinogram[:, 1])
+    def projection_backward(self, start_index, end_index, counts, add_psf=False):  # sinogram = [id1, id2, counts]
+        current_pos_comb = self.recon_option.get_lor_location(start_index, end_index)
         backward_img = parallelproj.joseph3d_back(
             xstart=current_pos_comb[:, :3],
             xend=current_pos_comb[:, 3:],
-            img_fwd=xp.asarray(sinogram[:, 2]),
+            img_fwd=xp.asarray(counts),
             img_origin=self.recon_option.img_origin,
             img_shape=self.recon_option.img_dim,
             voxsize=self.recon_option.voxel_size
         )
-        backward_img = parallelproj.backend.to_numpy_array(backward_img)
-        np.nan_to_num(backward_img, copy=False, nan=1e-8, posinf=1e-8, neginf=1e-8)
-        backward_img[backward_img == 0] = 1e-8
+        backward_img = parallelproj.backend.to_numpy_array(backward_img.astype(xp.float32))
+        np.nan_to_num(backward_img, copy=False, nan=0, posinf=0, neginf=0)
         if add_psf and self.psf_option is not None:
             backward_img = self.psf_option.add_static_psf(backward_img)
         return backward_img
@@ -101,9 +99,8 @@ class Projector:
                 ntofbins=self.tof_option.tof_bin_num,
             )
 
-        np.nan_to_num(forward_img, copy=False, nan=1e-8, posinf=1e-8, neginf=1e-8)
-        forward_img[forward_img == 0] = 1e-8
-        return parallelproj.backend.to_numpy_array(forward_img)
+        np.nan_to_num(forward_img, copy=False, nan=0, posinf=0, neginf=0)
+        return parallelproj.backend.to_numpy_array(forward_img.astype(xp.float32))
 
     def projection_backward_wtof(self, start_index, end_index, sinogram, add_psf=False):
         current_pos_comb = self.recon_option.get_lor_location(start_index, end_index)
@@ -120,9 +117,8 @@ class Projector:
             nsigmas=self.tof_option.nsigmas,
             ntofbins=self.tof_option.tof_bin_num,
         )
-        backward_img = parallelproj.backend.to_numpy_array(backward_img)
-        np.nan_to_num(backward_img, copy=False, nan=1e-8, posinf=1e-8, neginf=1e-8)
-        backward_img[backward_img == 0] = 1e-8
+        backward_img = parallelproj.backend.to_numpy_array(backward_img.astype(xp.float32))
+        np.nan_to_num(backward_img, copy=False, nan=0, posinf=0, neginf=0)
         if add_psf and self.psf_option is not None:
             backward_img = self.psf_option.add_static_psf(backward_img)
         return backward_img
