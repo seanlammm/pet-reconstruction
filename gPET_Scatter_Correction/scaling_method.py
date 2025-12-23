@@ -80,7 +80,7 @@ def get_randoms_sinogram(target_cdf, tof_option, scan_time):
     miche_index, miche_rm_option = crystal_base_id_to_block_base_sinogram(np.column_stack((castor_id_1, castor_id_2)))
     np.add.at(michelogram, tuple(miche_index.astype(int).T), rr[~miche_rm_option]*scan_time)
 
-    michelogram = np.repeat(michelogram[np.newaxis, :, :, :, :], tof_option.tof_bin_num, axis=0) / tof_option.tof_bin_num
+    michelogram = np.repeat(michelogram[np.newaxis, :, :, :, :], tof_option.tof_bin_num, axis=0) / ((tof_option.tof_bin_num - 1) / 2)
     return michelogram
 
 
@@ -93,12 +93,13 @@ def get_scale_by_sinogram_edge_fit(target_cdf_path, gpet_cdf_path, scan_time, to
     :return:
     '''
 
+    target_sinogram = cdf_to_block_base_sinogram(cdf_path=target_cdf_path, tof_option=tof_option, with_blur=0, wrr=0)
+    gpet_sinogram = cdf_to_block_base_sinogram(cdf_path=gpet_cdf_path, tof_option=tof_option, with_blur=1, wrr=0)
+
     target_cdf = get_cdf_info(cdf_path=target_cdf_path, wrr=1, wtof=1)
     randoms = get_randoms_sinogram(target_cdf, tof_option, scan_time)
-    target_sinogram = cdf_to_block_base_sinogram(cdf_path=target_cdf_path, tof_option=tof_option, with_blur=0, wrr=1)
     target_sinogram -= randoms
     target_sinogram[target_sinogram < 0] = 0
-    gpet_sinogram = cdf_to_block_base_sinogram(cdf_path=gpet_cdf_path, tof_option=tof_option, with_blur=1, wrr=0)
 
     # gaussian filter with maximum recovery
     target_max = target_sinogram.max()

@@ -49,13 +49,11 @@ def cdf_to_block_base_sinogram(cdf_path: str, tof_option: TOFOption, with_blur=0
         castor_id_1 = input_cdf["castor_id_1"][start_index:end_index]
         castor_id_2 = input_cdf["castor_id_2"][start_index:end_index]
         tof = input_cdf["tof"][start_index:end_index]
-
-        swap_flag = tof > 0
-        castor_id_1[swap_flag], castor_id_2[swap_flag], tof[swap_flag] = castor_id_1[swap_flag].copy(), castor_id_2[swap_flag].copy(), -tof[swap_flag].copy()
-
         if with_blur:
             tof = tof_blurring(tof, tof_option.tof_resolution)
 
+        swap_flag = tof > 0
+        castor_id_1[swap_flag], castor_id_2[swap_flag], tof[swap_flag] = castor_id_1[swap_flag].copy(), castor_id_2[swap_flag].copy(), -tof[swap_flag].copy()
         tof_bin_index, rm_option = tof_option.get_tof_bin_index(tof)
         miche_index, miche_rm_option = crystal_base_id_to_block_base_sinogram(np.column_stack((castor_id_1, castor_id_2)))
         tof_bin_index = tof_bin_index[~miche_rm_option]
