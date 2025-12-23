@@ -24,16 +24,14 @@ class MLAA(ReconOption):
         self.n = 170
 
     def get_sense_img(self):
-        self.sense_img = np.zeros(self.img_dim)
-        for i in tqdm(range(self.scanner_option.crystal_per_layer), desc="calculating sensesitivity image..."):
-            ai = self.projector.projection_forward_lors(self.mu_map, np.ones([self.scanner_option.crystal_per_layer - i]) * i, np.arange(i, self.scanner_option.crystal_per_layer), False)
-            ai = np.exp(-ai)
-            self.sense_img += self.projector.projection_backward(
-                start_index=np.ones([self.scanner_option.crystal_per_layer - i]) * i,
-                end_index=np.arange(i, self.scanner_option.crystal_per_layer),
-                counts=ai,
-                add_psf=False
-            )
+        ai = self.projector.projection_forward_lors(self.mu_map, self.events_LOR[:, 0], self.events_LOR[:, 1], False)
+        ai = np.exp(-ai)
+        self.sense_img = self.projector.projection_backward(
+            start_index=self.events_LOR[:, 0],
+            end_index=self.events_LOR[:, 1],
+            counts=ai,
+            add_psf=False
+        )
 
     def set_0_outsize_phantom(self, img):
         h, w = img.shape[:2]  # 获取图像高度和宽度（忽略通道数）
@@ -72,11 +70,15 @@ class MLAA(ReconOption):
         self.ac_map[self.ac_map < 0] = 0
 
     def get_mu_map_update(self):
+        arbitrary_b = 1
         bi = self.projector.projection_forward_lors_wtof(self.ac_map, self.events_LOR[:, 0], self.events_LOR[:, 1], False)
+        filled_yi = self.yi.copy()
+        bi[filled_yi == 0] = arbitrary_b
+        filled_yi[filled_yi == 0] = arbitrary_b
         ai = np.exp(-self.projector.projection_forward_lors(self.mu_map, self.events_LOR[:, 0], self.events_LOR[:, 1], False))
         ai = np.repeat(ai[:, np.newaxis], self.tof_option.tof_bin_num, axis=1)
         bp_aibi = self.projector.projection_backward_wtof(self.events_LOR[:, 0], self.events_LOR[:, 1], (ai * bi), False)
-        bp_yi = self.projector.projection_backward_wtof(self.events_LOR[:, 0], self.events_LOR[:, 1], self.yi, False)
+        bp_yi = self.projector.projection_backward_wtof(self.events_LOR[:, 0], self.events_LOR[:, 1], filled_yi, False)
         mu_update = (self.alpha_p / self.n) * (1 - bp_yi / bp_aibi)
         np.nan_to_num(mu_update, copy=False, nan=0, posinf=0, neginf=0)
         self.mu_map += mu_update
@@ -116,9 +118,9 @@ class MLAA(ReconOption):
         return score
 
     def run(self):
-        iteration = 100
-        self.events_LOR, self.yi = self.get_coins_wtof(self.ex_cdf_path, tof_option, 0)
-        # self.get_sense_img()
+        iteration = 1000
+        self.events_LOR, self.yi = self.get_coins_wtof(self.ex_cdf_path, tof_option, scanner_option, 0, return_with_full_lor=True)
+        self.get_sense_img()
         # self.sense_img = np.fromfile(r"D:\linyuejie\BaiduSyncdisk\data_for_mlaa\test_output\tof_mlem\sense_img.raw", dtype=np.float32).reshape([170, 170, 170])
         obj_func_score = np.zeros(iteration)
         for i in range(iteration):
@@ -131,7 +133,7 @@ class MLAA(ReconOption):
             # plt.plot(obj_func_score)
             # plt.scatter(np.arange(iteration), obj_func_score, s=30, marker="*")
             # plt.savefig(r"D:\BaiduNetdiskDownload\data_for_mlaa\test_output\tof_mlaa\score.jpg", bbox_inches="tight")
-            if iteration % 10 == 0:
+            if iteration % 50 == 0:
                 obj_func_score.astype(np.float32).tofile(self.output_dir + r"\score.raw")
 
 

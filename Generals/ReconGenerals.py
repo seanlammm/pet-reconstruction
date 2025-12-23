@@ -89,7 +89,7 @@ class ReconOption:
         # coins = [id_1, id2, counts]
         return coins
 
-    def get_coins_wtof(self, cdf_path, tof_option: TOFOption, start_index, end_index=None):
+    def get_coins_wtof(self, cdf_path, tof_option: TOFOption, scanner_option: ScannerOption, start_index, end_index=None, return_with_full_lor=False):
         current_dtype = [('time', 'i4'), ('tof', 'f4'), ('castor_id_1', 'i4'), ('castor_id_2', 'i4')]
         block_size = np.empty(0, dtype=current_dtype).itemsize
         event_num = os.path.getsize(cdf_path) / block_size
@@ -103,25 +103,36 @@ class ReconOption:
             data = f.read(block_size * (end_index - start_index))
 
         coins = np.frombuffer(data, dtype=current_dtype)
-        coins = np.column_stack((coins["castor_id_1"], coins["castor_id_2"], coins["tof"]))
+        castor_id_1 = coins["castor_id_1"].astype(np.uint64)
+        castor_id_2 = coins["castor_id_2"].astype(np.uint64)
+        tof = coins["tof"].astype(np.float32)
         # 这里为了避免后续有重复的 id 相反的 LOR，决定把小 id 放在 id1 ，大 id 放 id2
         # 在后续读取 tof 时要注意将 tof 置反
-        flip_flag = coins[:, 0] > coins[:, 1]
-        coins[flip_flag, 0], coins[flip_flag, 1], coins[flip_flag, 2] = coins[flip_flag, 1].copy(), coins[flip_flag, 0].copy(), -coins[flip_flag, 2].copy()
+        flip_flag = castor_id_1 > castor_id_2
+        castor_id_1[flip_flag], castor_id_2[flip_flag], tof[flip_flag] = castor_id_2[flip_flag].copy(), castor_id_1[flip_flag].copy(), -tof[flip_flag].copy()
 
-        tof_bin_index, rm_option = tof_option.get_tof_bin_index(coins[:, 2])
+        tof_bin_index, rm_option = tof_option.get_tof_bin_index(tof)
 
         # if remove coins out of tof range
         tof_bin_index = tof_bin_index[~rm_option]
-        coins = coins[~rm_option, :]
+        castor_id_1, castor_id_2, tof = castor_id_1[~rm_option], castor_id_2[~rm_option], tof[~rm_option]
 
-        coins_1d = coins[:, 0] * self.scanner_option.crystal_num + coins[:, 1]
-        uni_coins, uni_row_index = np.unique(coins_1d, return_inverse=True)
-        coins_id_1 = uni_coins // self.scanner_option.crystal_num
-        coins_id_2 = uni_coins % self.scanner_option.crystal_num
-        uni_coins = np.column_stack((coins_id_1, coins_id_2))
-        histo = np.zeros([uni_coins.shape[0], tof_option.tof_bin_num], dtype=int)
-        np.add.at(histo, tuple(np.column_stack((uni_row_index, tof_bin_index)).astype(int).T), 1)
+        if return_with_full_lor:
+            i, j = np.meshgrid(np.arange(scanner_option.crystal_num, dtype=np.uint32), np.arange(scanner_option.crystal_num, dtype=np.uint32), indexing='ij')
+            mask = i < j
+            uni_coins = np.column_stack((i[mask], j[mask]))
+            histo = np.zeros([uni_coins.shape[0], tof_option.tof_bin_num], dtype=np.uint32)
+
+            row_index = castor_id_1 * (2 * scanner_option.crystal_num - castor_id_1 - 1) // 2 + castor_id_2 - castor_id_1 - 1
+            np.add.at(histo, tuple(np.column_stack((row_index, tof_bin_index)).astype(np.uint32).T), 1)
+        else:
+            coins_1d = castor_id_1 * self.scanner_option.crystal_num + castor_id_2
+            uni_coins, uni_row_index = np.unique(coins_1d, return_inverse=True)
+            coins_id_1 = (uni_coins // self.scanner_option.crystal_num).astype(np.uint32)
+            coins_id_2 = (uni_coins % self.scanner_option.crystal_num).astype(np.uint32)
+            uni_coins = np.column_stack((coins_id_1, coins_id_2))
+            histo = np.zeros([uni_coins.shape[0], tof_option.tof_bin_num], dtype=np.uint32)
+            np.add.at(histo, tuple(np.column_stack((uni_row_index, tof_bin_index)).astype(np.uint32).T), 1)
 
         # coins = [id_1, id2], histo = [n_events, tof_bin]
         return uni_coins.astype(int), histo
