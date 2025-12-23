@@ -95,8 +95,8 @@ class MLEM(ReconOption):
 if __name__ == "__main__":
     os.chdir(r"D:\linyuejie\git-project\pet-reconstruction-in-github")
     scanner_option = ScannerOption("WBBrain_20251219")
-    ac_map = np.ones([170, 170, 170])
-    mu_map = np.flip(np.fromfile(r"D:\linyuejie\BaiduSyncdisk\data_for_mlaa\clear_mumap_dim170.raw", dtype=np.float32).reshape(170, 170, 170).transpose([2, 1, 0]), axis=1)
+    ac_map = np.ones([170, 170, 170]).transpose([2, 1, 0])
+    mu_map = np.fromfile(r"D:\linyuejie\BaiduSyncdisk\data_for_mlaa\clear_mumap_dim170.raw", dtype=np.float32).reshape(170, 170, 170).transpose([2, 1, 0])
     psf_option = PointSpreadFunction(sigma=1)
     tof_option = TOFOption(tof_resolution=300, tof_bin_num=21, tof_range_in_ps=1000)
     mlem = MLEM(

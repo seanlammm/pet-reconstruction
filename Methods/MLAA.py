@@ -35,7 +35,7 @@ class MLAA(ReconOption):
                 add_psf=False
             )
 
-    def set_0_outsize_fov(self, img):
+    def set_0_outsize_phantom(self, img):
         h, w = img.shape[:2]  # 获取图像高度和宽度（忽略通道数）
         cx, cy = w // 2, h // 2  # 图像中心坐标（x轴：宽度方向，y轴：高度方向）
 
@@ -43,13 +43,15 @@ class MLAA(ReconOption):
         y = np.arange(h)  # y轴坐标：0 ~ h-1
         xx, yy = np.meshgrid(x, y)  # 生成网格：xx.shape=(h,w), yy.shape=(h,w)
         distance = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
-        mask = (distance <= self.scanner_option.scanner_radius).astype(int)
 
-        # 3D图像（彩色图）需要扩展掩码维度（从2D->3D），与图像通道匹配
+        # set voxel out of phantom to zero
+        mask = (distance <= 80).astype(int)
         if len(img.shape) == 3:
-            mask = np.expand_dims(mask, axis=-1)  # mask.shape=(h,w,1)，广播到通道数
+            mask = np.repeat(mask[:, :, np.newaxis], img.shape[2], axis=2)  # mask.shape=(h,w,1)，广播到通道数
+        mask[:, :, np.arange(img.shape[0]) < (80 - 50)] = 0
+        mask[:, :, np.arange(img.shape[0]) > (80 + 50)] = 0
+        result = img * mask.astype(img.dtype)
 
-        result = img * mask.astype(img.dtype)  # 掩码转图像数据类型（避免类型不匹配）
         return result
 
     def get_ac_map_update(self):
@@ -66,7 +68,8 @@ class MLAA(ReconOption):
         self.ac_map = self.ac_map / self.sense_img * ac_update
         self.ac_map[self.sense_img == 0] = 0
         np.nan_to_num(self.ac_map, copy=False, nan=0, posinf=0, neginf=0)
-        self.ac_map = self.set_0_outsize_fov(self.ac_map)
+        self.ac_map = self.set_0_outsize_phantom(self.ac_map)
+        self.ac_map[self.ac_map < 0] = 0
 
     def get_mu_map_update(self):
         bi = self.projector.projection_forward_lors_wtof(self.ac_map, self.events_LOR[:, 0], self.events_LOR[:, 1], False)
@@ -76,8 +79,9 @@ class MLAA(ReconOption):
         bp_yi = self.projector.projection_backward_wtof(self.events_LOR[:, 0], self.events_LOR[:, 1], self.yi, False)
         mu_update = (self.alpha_p / self.n) * (1 - bp_yi / bp_aibi)
         np.nan_to_num(mu_update, copy=False, nan=0, posinf=0, neginf=0)
-        mu_update = self.set_0_outsize_fov(mu_update)
         self.mu_map += mu_update
+        self.mu_map = self.set_0_outsize_phantom(self.mu_map)
+        self.mu_map[self.mu_map < 0] = 0
 
     def get_attn_ml_sps(self):
         # from kernel MLAA
@@ -112,9 +116,9 @@ class MLAA(ReconOption):
         return score
 
     def run(self):
-        iteration = 1000
+        iteration = 100
         self.events_LOR, self.yi = self.get_coins_wtof(self.ex_cdf_path, tof_option, 0)
-        self.get_sense_img()
+        # self.get_sense_img()
         # self.sense_img = np.fromfile(r"D:\linyuejie\BaiduSyncdisk\data_for_mlaa\test_output\tof_mlem\sense_img.raw", dtype=np.float32).reshape([170, 170, 170])
         obj_func_score = np.zeros(iteration)
         for i in range(iteration):
@@ -127,14 +131,15 @@ class MLAA(ReconOption):
             # plt.plot(obj_func_score)
             # plt.scatter(np.arange(iteration), obj_func_score, s=30, marker="*")
             # plt.savefig(r"D:\BaiduNetdiskDownload\data_for_mlaa\test_output\tof_mlaa\score.jpg", bbox_inches="tight")
-            obj_func_score.astype(np.float32).tofile(self.output_dir + r"\score.raw")
+            if iteration % 10 == 0:
+                obj_func_score.astype(np.float32).tofile(self.output_dir + r"\score.raw")
 
 
 if __name__ == "__main__":
     os.chdir(r"D:\linyuejie\git-project\pet-reconstruction-in-github")
     scanner_option = ScannerOption("WBBrain_20251219")
-    ac_map = np.ones([170, 170, 170])
-    mu_map = np.flip(np.fromfile(r"D:\linyuejie\BaiduSyncdisk\data_for_mlaa\initial_mumap_dim170.raw", dtype=np.float32).reshape(170, 170, 170).transpose([2, 1, 0]), axis=1)
+    ac_map = np.ones([170, 170, 170]).transpose([2, 1, 0])
+    mu_map = np.fromfile(r"D:\linyuejie\BaiduSyncdisk\data_for_mlaa\initial_mumap_dim170.raw", dtype=np.float32).reshape(170, 170, 170).transpose([2, 1, 0])
     psf_option = PointSpreadFunction(sigma=1)
     tof_option = TOFOption(tof_resolution=300, tof_bin_num=21, tof_range_in_ps=1000)
     mlaa = MLAA(

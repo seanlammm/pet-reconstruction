@@ -17,4 +17,14 @@ class TOFOption:
         self.tof_range_in_mm = tof_range_in_ps * self.light_speed
         self.tof_bin_edges = np.linspace(-1, 1, tof_bin_num+1) * self.tof_range_in_mm / 2
         self.tof_bin_width = self.tof_bin_edges[1] - self.tof_bin_edges[0]
+        self.tof_resolution = tof_resolution
         self.sigma_tof = np.asarray([(tof_resolution * self.light_speed / 2) / (2 * np.sqrt(2*np.log(2)))], dtype=np.float32)
+
+    def get_tof_bin_index(self, tof_in_ps):
+        tof_in_mm = tof_in_ps * self.light_speed / 2
+        rm_option = (tof_in_mm < self.tof_bin_edges[0]) | (tof_in_mm > self.tof_bin_edges[-1])
+        tof_bin_index = np.digitize(tof_in_mm, self.tof_bin_edges) - 1
+        tof_bin_index[tof_bin_index < 0] = 0
+        tof_bin_index[tof_bin_index >= self.tof_bin_num] = self.tof_bin_num - 1
+
+        return tof_bin_index, rm_option

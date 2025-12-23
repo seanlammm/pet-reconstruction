@@ -108,14 +108,12 @@ class ReconOption:
         # 在后续读取 tof 时要注意将 tof 置反
         flip_flag = coins[:, 0] > coins[:, 1]
         coins[flip_flag, 0], coins[flip_flag, 1], coins[flip_flag, 2] = coins[flip_flag, 1].copy(), coins[flip_flag, 0].copy(), -coins[flip_flag, 2].copy()
-        # TOF bin 从 -max(tof) 到 max(tof)，tof_bin_num 需要单数
 
-        # out_of_range = (coins[:, 2] < tof_range[0]) | (coins[:, 2] >= tof_range[1])
-        # coins = coins[~out_of_range, :]
-        tof_pos = coins[:, 2] * tof_option.light_speed / 2
-        tof_bin_index = np.digitize(tof_pos, tof_option.tof_bin_edges) - 1
-        tof_bin_index[tof_bin_index < 0] = 0
-        tof_bin_index[tof_bin_index >= tof_option.tof_bin_num] = tof_option.tof_bin_num - 1
+        tof_bin_index, rm_option = tof_option.get_tof_bin_index(coins[:, 2])
+
+        # if remove coins out of tof range
+        tof_bin_index = tof_bin_index[~rm_option]
+        coins = coins[~rm_option, :]
 
         coins_1d = coins[:, 0] * self.scanner_option.crystal_num + coins[:, 1]
         uni_coins, uni_row_index = np.unique(coins_1d, return_inverse=True)
