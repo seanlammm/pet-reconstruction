@@ -1,130 +1,83 @@
 import numpy as np
 
-def trl_curvature(yi, bi, ri, li, ctype=None):
-    """
-    为泊松传输模型（Poisson transmission model）计算替代抛物线曲率（surrogate parabola curvatures）
-    移植自 Matlab 同名函数，保持完全兼容
+import numpy as np
 
-    Parameters:
-        yi (np.ndarray): 观测值（如探测器光子计数）
-        bi (np.ndarray or float): 背景项/系统参数（需为正）
-        ri (np.ndarray or float): 散射项/残余计数（需非负）
-        li (np.ndarray): 当前迭代的线衰减系数积分（line integral）
-        ctype (str, optional): 曲率计算模式，默认 'oc'
-            - 'oc': Erdogan 最优曲率（默认）
-            - 'pc': 预计算曲率（兼容 trpl3）
-            - 'nc': 牛顿曲率（当前二阶导数）
+
+def trl_curvature_oc(yi, bi, ri, li):
+    """
+    Compute surrogate parabola curvatures for Poisson transmission model.
+    Only implements the 'oc' (Optimal Curvature) mode based on Erdogan's formula.
+
+    Args:
+        yi (np.ndarray): Measurement data (counts).
+        bi (np.ndarray): Normalized activity projection (blank scan equivalent).
+        ri (np.ndarray): Randoms + Scatter.
+        li (np.ndarray): Current attenuation line integrals.
 
     Returns:
-        np.ndarray: 非负曲率数组（与 yi 同形状）
-
-    Raises:
-        ValueError: 输入参数不完整或模式无效
+        ni (np.ndarray): The optimal curvature map.
     """
 
-    # 输入参数检查
-    if ctype is None:
-        ctype = 'oc'
-    ctype = ctype.lower()
-    valid_ctypes = ['oc', 'pc', 'nc']
-    if ctype not in valid_ctypes:
-        raise ValueError(f"无效的 ctype: {ctype}，必须是 {valid_ctypes} 之一")
-    if len([x for x in [yi, bi, ri, li] if x is None]) >= 1:
-        raise ValueError("输入参数 yi, bi, ri, li 不能为空")
+    # 1. Convert inputs to single precision (float32) to match MATLAB code behavior
+    yi = yi.astype(np.float32)
+    bi = bi.astype(np.float32)
+    ri = ri.astype(np.float32)
+    li = li.astype(np.float32)
 
-    # 确保输入为 NumPy 数组（支持标量输入自动广播）
-    yi = np.asarray(yi, dtype=np.float64)
-    bi = np.asarray(bi, dtype=np.float64) if not np.isscalar(bi) else bi
-    ri = np.asarray(ri, dtype=np.float64) if not np.isscalar(ri) else ri
-    li = np.asarray(li, dtype=np.float64)
+    # 2. Define Helper Functions (implemented as inline vector operations below)
+    # The original MATLAB code defines:
+    # h = @(y,b,r,l)(y.*log(b.*exp(-l)+r)-(b.*exp(-l)+r));
+    # dh = @(y,b,r,l)((1 - y ./ (b.*exp(-l)+r)) .* b.*exp(-l));
 
-    # 定义似然函数 h 和其对 l 的一阶导数 dh（对应原 Matlab inline 函数）
-    def h(y, b, r, l):
-        """泊松似然函数核心项：h = y*log(b*exp(-l) + r) - (b*exp(-l) + r)"""
-        bel = b * np.exp(-l)
-        yb = bel + r
-        return y * np.log(yb) - yb
+    # Pre-calculate common term: expected value y_bar = b * exp(-l) + r
+    # We use np.maximum to avoid potential division by zero if inputs are bad,
+    # though in valid PET data yb should be > 0.
+    yb = bi * np.exp(-li) + ri
 
-    def dh(y, b, r, l):
-        """h 对 l 的一阶导数：dh = (1 - y/(b*exp(-l) + r)) * b*exp(-l)"""
-        bel = b * np.exp(-l)
-        yb = bel + r
-        return (1 - y / yb) * bel
+    # 3. Compute curvature at l = 0 (Base approximation)
+    # MATLAB: ni_max = bi .* (1 - yi .* ri ./ (bi + ri).^2);
+    # NumPy broadcasting handles scalars automatically.
+    # Added a tiny epsilon to denominator to prevent division by zero if bi+ri=0
+    denom_0 = (bi + ri) ** 2
+    term_0 = np.divide(yi * ri, denom_0, where=denom_0 != 0)
+    ni_max = bi * (1 - term_0)
 
-    # -------------------------- 模式 1: 'oc' 最优曲率 --------------------------
-    if ctype == 'oc':
-        # 初始化最大曲率（l=0 时的曲率）
-        ni_max = np.zeros_like(yi)
-        bi_scalar = np.isscalar(bi)
-        ri_scalar = np.isscalar(ri)
+    # Ensure non-negative (Convexity constraint)
+    ni = np.maximum(ni_max, 0)
 
-        if bi_scalar:
-            # 标量 bi（必须为正）
-            if bi <= 0:
-                raise ValueError("标量 bi 必须大于 0")
-            ni_max = bi * (1 - yi * ri / (bi + ri) ** 2)
-        else:
-            # 数组 bi：仅处理 bi>0 的位置
-            i0 = bi > 0
-            ni_max[i0] = 0  # 初始化有效区域
-            if ri_scalar:
-                rii = 1 if ri == 0 else ri  # 标量 ri 处理
-            else:
-                rii = ri[i0]  # 数组 ri 取对应有效区域
-            # 计算有效区域的 ni_max
-            denominator = (bi[i0] + rii) ** 2
-            ni_max[i0] = bi[i0] * (1 - yi[i0] * rii / denominator)
+    # 4. Handle "Large" attenuation values (li >= 0.1)
+    # Erdogan's formula is numerically unstable near 0, so we use the limit (step 3) for small li
+    # and the full formula for large li.
+    mask_large = li >= 0.1
 
-        # 强制曲率非负
-        ni_max = np.maximum(ni_max, 0)
-        ni = ni_max.copy()
+    if np.any(mask_large):
+        # Extract values where li >= 0.1 to save computation and ensure safety
+        y_m = yi[mask_large]
+        b_m = bi[mask_large] if bi.ndim > 0 and bi.size > 1 else bi
+        r_m = ri[mask_large] if ri.ndim > 0 and ri.size > 1 else ri
+        l_m = li[mask_large]
+        yb_m = yb[mask_large]  # The predicted value at current l
 
-        # 数值精度处理：li < 0.1 时用 ni_max，否则计算实际曲率（与原 Matlab 一致）
-        il0 = li < 0.1
+        # Calculate h(l) and dh(l) at current l
+        # h(l) = y * log(yb) - yb
+        h_val = y_m * np.log(yb_m) - yb_m
 
-        # 计算 tmp = h(li) - h(0) - li*dh(li)
-        h_li = h(yi, bi, ri, li)
-        h_0 = h(yi, bi, ri, np.zeros_like(li))
-        dh_li = dh(yi, bi, ri, li)
-        tmp = h_li - h_0 - li * dh_li
+        # dh(l) = (1 - y/yb) * (yb - r)
+        # Note: b*exp(-l) is equivalent to (yb - r)
+        dh_val = (1 - y_m / yb_m) * (yb_m - r_m)
 
-        # 对 li >=0.1 的区域更新曲率
-        i = ~il0
-        if np.any(i):
-            li_i = li[i]
-            tmp_i = np.maximum(tmp[i], 0)  # 确保分子非负
-            ni[i] = 2 / (li_i ** 2) * tmp_i
+        # Calculate h(0) -> l=0 implies exp(-l)=1, so yb_0 = b + r
+        yb_0 = b_m + r_m
+        h_0 = y_m * np.log(yb_0) - yb_0
 
-    # -------------------------- 模式 2: 'pc' 预计算曲率 --------------------------
-    elif ctype == 'pc':
-        ni = np.zeros_like(yi)
-        # 有效射线条件：yi > ri 且 ri >=0 且 bi >0
-        if np.isscalar(bi):
-            bi_arr = np.full_like(yi, bi)
-        else:
-            bi_arr = bi
-        if np.isscalar(ri):
-            ri_arr = np.full_like(yi, ri)
-        else:
-            ri_arr = ri
+        # Erdogan's Optimal Curvature Formula:
+        # ni = (2 / l^2) * [ h(l) - h(0) - l * dh(l) ]
+        tmp = h_val - h_0 - l_m * dh_val
 
-        ii = (yi > ri_arr) & (ri_arr >= 0) & (bi_arr > 0)
-        # 计算有效区域曲率：(yi - ri)^2 / yi
-        ni[ii] = (yi[ii] - ri_arr[ii]) ** 2 / yi[ii]
+        # Apply formula and update the 'ni' array
+        ni_correction = (2.0 / (l_m ** 2)) * np.maximum(tmp, 0)
+        ni[mask_large] = ni_correction
 
-    # -------------------------- 模式 3: 'nc' 牛顿曲率 --------------------------
-    elif ctype == 'nc':
-        # bel = bi * exp(-li)，yb = bel + ri
-        bel = bi * np.exp(-li)
-        if np.isscalar(ri):
-            yb = bel + ri
-        else:
-            yb = bel + ri
-        # 牛顿曲率公式：(1 - ri*yi/yb²) * bel
-        ni = (1 - ri * yi / (yb ** 2)) * bel
-
-    # 最终强制所有曲率非负（与原 Matlab 一致）
-    ni = np.maximum(ni, 0)
     return ni
 
 
