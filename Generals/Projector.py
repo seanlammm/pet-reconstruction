@@ -1,10 +1,12 @@
+
 import array_api_compat.cupy as xp
+# import numpy as xp
 import numpy as np
 import parallelproj
 from Generals.ReconGenerals import ReconOption
 from Generals.ScannerGenerals import ScannerOption
 from Generals.PointSpreadFunction import PointSpreadFunction
-from Generals.TOFGeneranls import TOFOption
+from Generals.TOFGenerals import TOFOption
 from tqdm import tqdm
 
 
@@ -58,7 +60,7 @@ class Projector:
             xend=xp.asarray(current_pos_comb[:, 3:]),
             img=xp.asarray(img),
             img_origin=xp.asarray(self.recon_option.img_origin),
-            voxsize=xp.asarray(self.recon_option.voxel_size)
+            voxsize=xp.asarray(self.recon_option.voxel_size),
         )
         np.nan_to_num(forward_img, copy=False, nan=0, posinf=0, neginf=0)
         return parallelproj.backend.to_numpy_array(forward_img.astype(xp.float32))
@@ -71,7 +73,7 @@ class Projector:
             img_fwd=xp.asarray(counts),
             img_origin=xp.asarray(self.recon_option.img_origin),
             img_shape=self.recon_option.img_dim,
-            voxsize=xp.asarray(self.recon_option.voxel_size)
+            voxsize=xp.asarray(self.recon_option.voxel_size),
         )
         backward_img = parallelproj.backend.to_numpy_array(backward_img.astype(xp.float32))
         np.nan_to_num(backward_img, copy=False, nan=0, posinf=0, neginf=0)
@@ -80,6 +82,8 @@ class Projector:
         return backward_img
 
     def projection_forward_lors_wtof(self, img, lor_start_index, lor_end_index, add_psf):
+        if add_psf and self.psf_option is not None:
+            img = self.psf_option.add_static_psf(img)
         current_pos_comb = self.recon_option.get_lor_location(lor_start_index, lor_end_index)
         forward_img = parallelproj.joseph3d_fwd_tof_sino(
             xstart=xp.asarray(current_pos_comb[:, :3]),
@@ -116,3 +120,5 @@ class Projector:
         if add_psf and self.psf_option is not None:
             backward_img = self.psf_option.add_static_psf(backward_img)
         return backward_img
+
+    

@@ -2,7 +2,7 @@ import os.path
 import numpy as np
 from Generals.ScannerGenerals import ScannerOption
 from Generals.PointSpreadFunction import PointSpreadFunction
-from Generals.TOFGeneranls import TOFOption
+from Generals.TOFGenerals import TOFOption
 
 
 class ReconOption:
@@ -90,6 +90,7 @@ class ReconOption:
         return coins
 
     def get_coins_wtof(self, cdf_path, tof_option: TOFOption, scanner_option: ScannerOption, start_index, end_index=None, return_with_full_lor=False):
+        print("Loading cdf...")
         current_dtype = [('time', 'i4'), ('tof', 'f4'), ('castor_id_1', 'i4'), ('castor_id_2', 'i4')]
         block_size = np.empty(0, dtype=current_dtype).itemsize
         event_num = os.path.getsize(cdf_path) / block_size
@@ -118,13 +119,12 @@ class ReconOption:
         castor_id_1, castor_id_2, tof = castor_id_1[~rm_option], castor_id_2[~rm_option], tof[~rm_option]
 
         if return_with_full_lor:
-            i, j = np.meshgrid(np.arange(scanner_option.crystal_num, dtype=np.uint32), np.arange(scanner_option.crystal_num, dtype=np.uint32), indexing='ij')
-            mask = i < j
-            uni_coins = np.column_stack((i[mask], j[mask]))
-            histo = np.zeros([uni_coins.shape[0], tof_option.tof_bin_num], dtype=np.uint32)
-
-            row_index = castor_id_1 * (2 * scanner_option.crystal_num - castor_id_1 - 1) // 2 + castor_id_2 - castor_id_1 - 1
-            np.add.at(histo, tuple(np.column_stack((row_index, tof_bin_index)).astype(np.uint32).T), 1)
+            rows, cols = np.triu_indices(scanner_option.crystal_num)
+            uni_coins = np.column_stack((rows, cols))
+            pair_indices = (castor_id_1 * (2 * scanner_option.crystal_num - castor_id_1 + 1)) // 2 + (castor_id_2 - castor_id_1)
+            flat_indices = pair_indices * tof_option.tof_bin_num + tof_bin_index
+            counts = np.bincount(flat_indices.astype(int), minlength=uni_coins.shape[0] * tof_option.tof_bin_num)
+            histo = counts.reshape((uni_coins.shape[0], tof_option.tof_bin_num)).astype(np.uint32)
         else:
             coins_1d = castor_id_1 * self.scanner_option.crystal_num + castor_id_2
             uni_coins, uni_row_index = np.unique(coins_1d, return_inverse=True)
