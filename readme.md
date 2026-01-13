@@ -1,6 +1,6 @@
 # pet-reconstruction
 
-## 环境搭建
+## Environment Setup
 
 ```bash
 conda create -n env-name  -c conda-forge libparallelproj parallelproj pytorch cupy cudatoolkit=11.8 tqdm python=3.10
@@ -8,21 +8,17 @@ conda create -n env-name  -c conda-forge libparallelproj parallelproj pytorch cu
 
 
 
-## 已实现重建方法
+## Implemented Reconstruction Algorithms
 
 1. OSEM
+1. MLAA
 
 
 
-## 其余工具
+## Utilities
 
-1. 符合数据 –> CDF
+1. Coincidence raw data –> CDF
 2. CastorId –> Sinogram (Michegram & SSRB)
 3. Mumap –> ACF
 4. ROOT –> CDF
-
-
-
-## 待实现
-
-1. OpenSSS
+5. gPET scatter CDF -> castor scf
